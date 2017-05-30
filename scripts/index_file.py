@@ -7,18 +7,15 @@ from utils import ProgressBar
 lag = 3
 num_frames = 4
 
-file_dir = '../../../../scratch/kvg245/vidsal_gan/vidsal_gan/data/savam/video_data/'
-
-files_list= [x for x in os.listdir(file_dir) if x.endswith('avi')]
-print sorted(files_list)
-print len(files_list)
+file_dir = '../../../../scratch/kvg245/vidsal_gan/vidsal_gan/data/IRCCYN3D/'
 data_list = []
 print "reading file"
-progress = ProgressBar(len(files_list),fmt=ProgressBar.FULL)
+
 index_list = []
 v = 0
-with h5py.File(file_dir+'video_data.h5','r') as hf:
-    for file in sorted(files_list):
+with h5py.File(file_dir+'maps_data.h5','r') as hf:
+    progress = ProgressBar(len(hf.keys()),fmt=ProgressBar.FULL)
+    for file in sorted(hf.keys()):
     	progress.current+=1
 	progress()
 	data = hf[file][:]
