@@ -26,8 +26,8 @@ def shuffled(x):
 
 
 def save_image (image,output_dir,filename):
-    import matplotlib
-    matplotlib.image.imsave(output_dir+filename, image)
+    import cv2
+    cv2.imwrite(output_dir+filename+'.png', image)
     return
 
 

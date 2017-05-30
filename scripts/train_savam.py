@@ -16,14 +16,15 @@ import subprocess as sp
 Model = collections.namedtuple("Model", "outputs, predict_real, predict_fake, discrim_loss, discrim_grads_and_vars, gen_loss_GAN, gen_loss_L1, gen_grads_and_vars, train")
 
 data_dir = '/scratch/kvg245/vidsal_gan/vidsal_gan/data/savam/'
-output_dir = '/scratch/kvg245/vidsal_gan/vidsal_gan/output/SAVAM_10_l2_10_0/'
+output_dir = '/scratch/kvg245/vidsal_gan/vidsal_gan/output/SAVAM_10_l2_10_0_over/'
 target_file = 'gaussian_vizualizations/maps_data.h5'
 input_file = 'video_data/input_data.h5'
 index_file = 'video_data/indices'
 
-train =True
-ckpt = True
-max_epoch = 10
+train = True
+overfit = True
+ckpt = False
+max_epoch = 300
 seed = 4
 num_frames = 4
 progress_freq = 1
@@ -55,7 +56,7 @@ class batch_generator:
 		    index_data.append(a)
 		elif not train and a[0] in val_list:
 		    index_data.append(a)
-	    index_data = shuffled(index_data)
+	    index_data = index_data
 	print len(index_data)
 	input_list = []
 	target_list = []
@@ -89,16 +90,19 @@ class batch_generator:
 #	progress.done()
 	target_batch = np.asarray(target_batch)/255.0
 	input_batch = np.asarray(input_batch)
-
-
-	return {'input':input_batch.reshape(input_batch.shape[0],input_batch.shape[2],input_batch.shape[3],input_batch.shape[4]*input_batch.shape[1]),'target':np.reshape(target_batch,(target_batch.shape[0],target_batch.shape[1],target_batch.shape[2],1))}
+	dummy = np.zeros((input_batch.shape[0],input_batch.shape[2],input_batch.shape[3],input_batch.shape[1]*input_batch.shape[4]))
+	dummy[:,:,:,:3] = input_batch[:,0,:,:,:]
+	dummy[:,:,:,3:6] = input_batch[:,1,:,:,:]
+	dummy[:,:,:,6:9] = input_batch[:,2,:,:,:]
+	dummy[:,:,:,9:] = input_batch[:,3,:,:,:]
+	return {'input':dummy,'target':np.reshape(target_batch,(target_batch.shape[0],target_batch.shape[1],target_batch.shape[2],1))}
 		
     def get_batch_vec(self):
 	"""Provides batch of data to process and keeps 
 	track of current index and epoch"""
 	
         if self.batch_index is None:
-	    self.batch_index = 8000 
+	    self.batch_index = 0
 	    self.current_epoch = 0
 	
         if self.batch_index < self.batch_len-self.batch_size-1:
@@ -169,17 +173,62 @@ def main():
 	    batch = bg.get_batch_vec()
 	    while bg.current_epoch == 0 :
 		feed_dict = {input:batch['input'],target :batch['target']}
-		predictions = sess.run(outputs,feed_dict = feed_dict)
+		predictions = sess.run(model.outputs,feed_dict = feed_dict)
 		for i in range(batch_size):
-		    p = predictions[i,:,:,:]
-		    t = batch['target'][i,:,:,:]
-		    i = batch['input'][i,:,:,0:3]
-		    save_image(p,output_dir,'p'+str(bg.batch_index+i))
-                    save_image(t,output_dir,'t'+str(bg.batch_index+i))
-                    save_image(i,output_dir,'i'+str(bg.batch_index+i))
-			
+		    p = predictions[i,:,:,:]*255.0
+		    t = batch['target'][i,:,:,:]*255.0
+		    print np.sort(p.reshape(256*256))
+		    n = batch['input'][i,:,:,0:3]
+		    #save_image(p,output_dir,str(bg.batch_index+i)+'p')
+                   #save_image(t,output_dir,str(bg.batch_index+i)+'t')
+                    #save_image(n,output_dir,str(bg.batch_index+i)+'i')
+		    print(bg.batch_index+i,bg.batch_len)
+		batch = bg.get_batch_vec()	
 		
+	elif overfit:
+	    bg = batch_generator(batch_size)
+	    batch = bg.get_batch_vec()
+	    feed_dict = {input:batch['input'],target :batch['target']} 
+	    for i in range(max_epoch):
+	        start = time.time()
+                def should(freq):
+                    return freq > 0 and ((bg.batch_index/batch_size) % freq == 0 )
+                
+                fetches = {
+                   "train": model.train,
+                   "global_step": sv.global_step,
+                        }
 
+                if should(summary_freq):
+                    fetches["summary"] = sv.summary_op
+
+                if should(progress_freq):
+                    fetches["discrim_loss"] = model.discrim_loss
+                    fetches["gen_loss_GAN"] = model.gen_loss_GAN
+                    fetches["gen_loss_L1"] = model.gen_loss_L1
+
+                results = sess.run(fetches,feed_dict = feed_dict)
+
+                print(results["discrim_loss"],results["gen_loss_GAN"],results['gen_loss_L1'],i)
+                if should(summary_freq):
+                   print("recording summary")
+                   sv.summary_writer.add_summary(results["summary"], i)
+                if should(save_freq):
+                   print("saving model")
+                   saver.save(sess, output_dir+"model.ckpt")
+	    predictions = sess.run(model.outputs,feed_dict = feed_dict)
+            for i in range(batch_size):
+                p = predictions[i,:,:,:]*255.0
+                t = batch['target'][i,:,:,:]*255.0
+                n = batch['input'][i,:,:,0:3]
+                save_image(p,output_dir,str(bg.batch_index+i)+'p')
+                save_image(t,output_dir,str(bg.batch_index+i)+'t')
+                save_image(n,output_dir,str(bg.batch_index+i)+'i')
+                print(i,bg.batch_len)
+
+
+
+		
 	elif train:
 	    start = time.time()
 	    while bg.current_epoch<max_epoch:
@@ -209,7 +258,7 @@ def main():
 		    print(results["discrim_loss"],results["gen_loss_GAN"],results['gen_loss_L1'],bg.current_epoch,bg.batch_index,time.time()-start,(time.time()-start)*(bg.batch_len-bg.batch_index)/batch_size*(max_epoch-bg.current_epoch-2)*batch_size)
                     if should(summary_freq):
                         print("recording summary")
-                        sv.summary_writer.add_summary(results["summary"], bg.batch_index/bg.batch_size*(bg.current_epoch+1))
+                        sv.summary_writer.add_summary(results["summary"], (bg.batch_index/bg.batch_size+batch_len/batch_size*bg.current_epoch))
                     if should(save_freq):
                         print("saving model")
                         saver.save(sess, output_dir+"model.ckpt")
