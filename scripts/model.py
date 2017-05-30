@@ -9,9 +9,9 @@ Examples = collections.namedtuple("Examples", "paths, inputs, targets, count, st
 Model = collections.namedtuple("Model", "outputs, predict_real, predict_fake, discrim_loss, discrim_grads_and_vars, gen_loss_GAN, gen_loss_L1, gen_grads_and_vars, train")
 
 EPS = 1e-12
-lr = 0.002
+lr = 0.0002
 beta1 = 0.5
-l1_weight = 10.0
+l1_weight = 100.0
 gan_weight = 1.0
 def create_generator(generator_inputs, generator_outputs_channels):
     layers = []
@@ -75,9 +75,9 @@ def create_generator(generator_inputs, generator_outputs_channels):
         input = tf.concat([layers[-1], layers[0]], axis=3)
         rectified = tf.nn.relu(input)
         output = deconv(rectified, generator_outputs_channels)
-        output = tf.sigmoid(output)
-	#output = conv11(output)
-	#output = tf.nn.sigmoid(output)
+        rectified = tf.nn.relu(output)
+	output = conv11(rectified)
+	output = tf.tanh(output)
         layers.append(output)
 
     return layers[-1]
@@ -157,12 +157,12 @@ def create_model(inputs, targets):
     with tf.name_scope("generator_train"):
         with tf.control_dependencies([discrim_train]):
             gen_tvars = [var for var in tf.trainable_variables() if var.name.startswith("generator")]
-            gen_optim = tf.train.AdamOptimizer(lr)
+            gen_optim = tf.train.AdamOptimizer(lr,beta1)
             gen_grads_and_vars = gen_optim.compute_gradients(gen_loss_L1, var_list=gen_tvars)
             gen_train = gen_optim.apply_gradients(gen_grads_and_vars)
     ema = tf.train.ExponentialMovingAverage(decay=0.99)
     update_losses = ema.apply([discrim_loss,gen_loss_GAN,gen_loss_L1])
-
+    #update_losses = ema.apply([gen_loss_L1])
     global_step = tf.contrib.framework.get_or_create_global_step()
     incr_global_step = tf.assign(global_step, global_step+1)
 

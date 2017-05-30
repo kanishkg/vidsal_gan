@@ -16,15 +16,15 @@ import subprocess as sp
 Model = collections.namedtuple("Model", "outputs, predict_real, predict_fake, discrim_loss, discrim_grads_and_vars, gen_loss_GAN, gen_loss_L1, gen_grads_and_vars, train")
 
 data_dir = '/scratch/kvg245/vidsal_gan/vidsal_gan/data/savam/'
-output_dir = '/scratch/kvg245/vidsal_gan/vidsal_gan/output/SAVAM_10_l2_10_0_over/'
+output_dir = '/scratch/kvg245/vidsal_gan/vidsal_gan/output/SAVAM_10_l1_100_1/'
 target_file = 'gaussian_vizualizations/maps_data.h5'
 input_file = 'video_data/input_data.h5'
 index_file = 'video_data/indices'
 
 train = True
-overfit = True
+overfit = False
 ckpt = False
-max_epoch = 300
+max_epoch = 30
 seed = 4
 num_frames = 4
 progress_freq = 1
@@ -49,14 +49,14 @@ class batch_generator:
         """Opens h5 dataset files and loads index pickle"""
         with open(data_dir+index_file,'rb') as f:
 	    index_raw= pickle.load(f)
-            val_list = [6,13,20,27,34,41]
+            val_list = [6,13,20,34,41]
 	    index_data = []
 	    for a in index_raw:
 		if train and a[0] not in val_list:
 		    index_data.append(a)
 		elif not train and a[0] in val_list:
 		    index_data.append(a)
-	    index_data = index_data
+	    index_data = shuffled(index_data)
 	print len(index_data)
 	input_list = []
 	target_list = []
@@ -258,7 +258,7 @@ def main():
 		    print(results["discrim_loss"],results["gen_loss_GAN"],results['gen_loss_L1'],bg.current_epoch,bg.batch_index,time.time()-start,(time.time()-start)*(bg.batch_len-bg.batch_index)/batch_size*(max_epoch-bg.current_epoch-2)*batch_size)
                     if should(summary_freq):
                         print("recording summary")
-                        sv.summary_writer.add_summary(results["summary"], (bg.batch_index/bg.batch_size+batch_len/batch_size*bg.current_epoch))
+                        sv.summary_writer.add_summary(results["summary"], (bg.batch_index/bg.batch_size+bg.batch_len/batch_size*bg.current_epoch))
                     if should(save_freq):
                         print("saving model")
                         saver.save(sess, output_dir+"model.ckpt")
