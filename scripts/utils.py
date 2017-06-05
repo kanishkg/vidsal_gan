@@ -16,10 +16,47 @@ import time
 import sys
 import re
 
+
+def kld(pred,target):
+    q = pred
+    q /= np.sum(pred.flatten())
+    p = target
+    p/= np.sum(p.flatten())
+    q+=np.finfo(q.dtype).eps
+    p+=np.finfo(p.dtype).eps
+    kl = np.sum(p*(np.log2(p/q)))
+    return kl
  
+def nss_model(prediction, fm):
+    """
+    wraps nss functionality for model evaluation
+    
+    input:
+        prediction: 2D matrix
+            the model salience map
+        fm : fixmat
+            Fixations that define the actuals
+    """
+    (r_y, r_x) = (1,1)
+    fix = ((np.array(fm.y-1)*r_y).astype(int),
+                            (np.array(fm.x-1)*r_x).astype(int))
+    return nss(prediction, fix)
+
+
+def nss(prediction, fix):
+    """
+    Compute the normalized scanpath salience
+    input:
+        fix : list, l[0] contains y, l[1] contains x
+    """
+
+    prediction = prediction - np.mean(prediction)
+    prediction = prediction / np.std(prediction)
+    return np.mean(prediction[fix[0], fix[1]])
+
+
 
 def shuffled(x):
-    import random
     y = x[:]
     random.shuffle(y)
     return y

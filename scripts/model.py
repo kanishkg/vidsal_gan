@@ -6,13 +6,14 @@ import tensorflow as tf
 from utils import *
 
 Examples = collections.namedtuple("Examples", "paths, inputs, targets, count, steps_per_epoch")
-Model = collections.namedtuple("Model", "outputs, predict_real, predict_fake, discrim_loss, discrim_grads_and_vars, gen_loss_GAN, gen_loss_L1, gen_grads_and_vars, train")
+Model = collections.namedtuple("Model", "outputs, predict_real, predict_fake, discrim_loss, discrim_grads_and_vars, gen_loss_GAN,gen_loss_cross, gen_loss_L1,gen_nss, gen_grads_and_vars, train")
 
 EPS = 1e-12
 lr = 0.0002
 beta1 = 0.5
-l1_weight = 100.0
+l1_weight = 0.0
 gan_weight = 1.0
+cross_weight = 10.0
 def create_generator(generator_inputs, generator_outputs_channels):
     layers = []
     ngf = 64 # number of generator filters
@@ -146,7 +147,11 @@ def create_model(inputs, targets):
         # abs(targets - outputs) => 0
         gen_loss_GAN = tf.reduce_mean(-tf.log(predict_fake + EPS))
 	gen_loss_L1 = tf.reduce_mean(tf.square(targets - outputs))
-        gen_loss = gen_loss_GAN * gan_weight + gen_loss_L1 * l1_weight
+	gen_loss_cross = -tf.reduce_mean(targets*tf.log(outputs+EPS)+(1-targets)*tf.log(1-outputs+EPS))
+	
+	maps = tf.map_fn(lambda img: tf.image.per_image_standardization(img), targets)
+	gen_nss = tf.reduce_mean(maps*tf.sign(targets))
+        gen_loss = gen_loss_GAN * gan_weight + gen_loss_L1 * l1_weight + gen_loss_cross * cross_weight
 
     with tf.name_scope("discriminator_train"):
         discrim_tvars = [var for var in tf.trainable_variables() if var.name.startswith("discriminator")]
@@ -158,10 +163,10 @@ def create_model(inputs, targets):
         with tf.control_dependencies([discrim_train]):
             gen_tvars = [var for var in tf.trainable_variables() if var.name.startswith("generator")]
             gen_optim = tf.train.AdamOptimizer(lr,beta1)
-            gen_grads_and_vars = gen_optim.compute_gradients(gen_loss_L1, var_list=gen_tvars)
+            gen_grads_and_vars = gen_optim.compute_gradients(gen_loss, var_list=gen_tvars)
             gen_train = gen_optim.apply_gradients(gen_grads_and_vars)
     ema = tf.train.ExponentialMovingAverage(decay=0.99)
-    update_losses = ema.apply([discrim_loss,gen_loss_GAN,gen_loss_L1])
+    update_losses = ema.apply([discrim_loss,gen_loss_GAN,gen_loss_L1,gen_loss_cross])
     #update_losses = ema.apply([gen_loss_L1])
     global_step = tf.contrib.framework.get_or_create_global_step()
     incr_global_step = tf.assign(global_step, global_step+1)
@@ -172,7 +177,9 @@ def create_model(inputs, targets):
         discrim_loss=discrim_loss,
         discrim_grads_and_vars=discrim_grads_and_vars,
         gen_loss_GAN=gen_loss,
+	gen_loss_cross = gen_loss_cross,
         gen_loss_L1=gen_loss_L1,
+	gen_nss = gen_nss,
         gen_grads_and_vars=gen_grads_and_vars,
         outputs=outputs,
         train=tf.group(update_losses,incr_global_step, gen_train),

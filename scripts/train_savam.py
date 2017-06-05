@@ -21,15 +21,16 @@ target_file = 'gaussian_vizualizations/maps_data.h5'
 input_file = 'video_data/input_data.h5'
 index_file = 'video_data/indices'
 
-train = True
+train = True 
 overfit = False
-ckpt = False
+ckpt = True
 max_epoch = 30
 seed = 4
-num_frames = 4
+num_frames = 4 
 progress_freq = 1
-summary_freq = 100
+summary_freq =  100
 save_freq = 1000
+val_freq = 4000
 vid_dict = {0: 'v01_Hugo_2172_left.avi', 1: 'v02_Dolphin_131474_left.avi', 2: 'v03_StepUp_67443_left.avi', 3: 'v04_LIVE1_0_left.avi', 4: 'v05_LIVE2_0_left.avi', 5: 'v06_LIVE3_0_left.avi', 6: 'v07_Avatar_142222_left.avi', 7: 'v08_Dolphin_127156_left.avi', 8: 'v09_StepUpRevolution_119518_left.avi', 9: 'v10_VQEG01_0_left.avi', 10: 'v11_VQEG02_0_left.avi', 11: 'v12_VQEG03_0_left.avi', 12: 'v13_IntoTheDeep_36475_left.avi', 13: 'v14_Pirates_47241_left.avi', 14: 'v15_Sanctum_147749_left.avi', 15: 'v16_StepUp_17153_left.avi', 16: 'v17_SpiderMan_76686_left.avi', 17: 'v18_StepUp_76411_left.avi', 18: 'v19_Avatar_206134_left.avi', 19: 'v20_DriveAngry_2820_left.avi', 20: 'v21_Pirates_25246_left.avi', 21: 'v22_VQEG04_0_left.avi', 22: 'v23_VQEG05_0_left.avi', 23: 'v24_VQEG06_0_left.avi', 24: 'v25_Dolphin_17437_left.avi', 25: 'v26_Galapagos_14830_left.avi', 26: 'v27_UnderworldAwakening_69044_left.avi', 27: 'v28_VQEG10_0_left.avi', 28: 'v29_Avatar_46279_left.avi', 29: 'v30_Dolphin_79095_left.avi', 30: 'v31_DriveAngry_83142_left.avi', 31: 'v32_Dolphin_81162_left.avi', 32: 'v33_Hugo_87461_left.avi', 33: 'v34_VQEG07_0_left.avi', 34: 'v35_VQEG08_0_left.avi', 35: 'v36_VQEG09_0_left.avi', 36: 'v37_UnderworldAwakening_91276_left.avi', 37: 'v38_StepUp_82572_left.avi', 38: 'v39_Avatar_98125_left.avi', 39: 'v42_MSOffice_242_left.avi', 40: 'v43_Panasonic_373_left.avi', 41: 'video_data.h5', 42: 'video_data.h5'}
 
 
@@ -37,9 +38,9 @@ class batch_generator:
     """Provides batches of input and target files with training indices
        Also opens h5 datasets"""
     
-    def __init__( self,batch_size = 8):
+    def __init__( self,batch_size = 8,istrain=True):
     	self.batch_size = batch_size
-	
+	self.istrain = istrain
 	self.index_data,self.target_data,self.input_data = self.open_files()
 	self.batch_len = len(self.index_data)
         self.current_epoch = None
@@ -52,9 +53,9 @@ class batch_generator:
             val_list = [6,13,20,34,41]
 	    index_data = []
 	    for a in index_raw:
-		if train and a[0] not in val_list:
+		if self.istrain and a[0] not in val_list:
 		    index_data.append(a)
-		elif not train and a[0] in val_list:
+		elif not self.istrain and a[0] in val_list:
 		    index_data.append(a)
 	    index_data = shuffled(index_data)
 	print len(index_data)
@@ -125,7 +126,7 @@ def main():
     tf.set_random_seed(seed)
     np.random.seed(seed)
     random.seed(seed)
-    bg = batch_generator(batch_size)
+    
     	
     #examples = bg.get_batch_vec()
     #print examples['input'].shape , examples['target'].shape
@@ -168,8 +169,8 @@ def main():
 	    restore_saver.restore(sess,checkpoint)
             
 	if not train:
-	    bg = batch_generator(batch_size)
-	    
+	    bg = batch_generator(batch_size,False)
+	     
 	    batch = bg.get_batch_vec()
 	    while bg.current_epoch == 0 :
 		feed_dict = {input:batch['input'],target :batch['target']}
@@ -177,11 +178,11 @@ def main():
 		for i in range(batch_size):
 		    p = predictions[i,:,:,:]*255.0
 		    t = batch['target'][i,:,:,:]*255.0
-		    print np.sort(p.reshape(256*256))
+		    #print np.sort(p.reshape(256*256))
 		    n = batch['input'][i,:,:,0:3]
-		    #save_image(p,output_dir,str(bg.batch_index+i)+'p')
-                   #save_image(t,output_dir,str(bg.batch_index+i)+'t')
-                    #save_image(n,output_dir,str(bg.batch_index+i)+'i')
+		    save_image(p,output_dir,str(bg.batch_index+i)+'plg')
+                    save_image(t,output_dir,str(bg.batch_index+i)+'t')
+                    save_image(n,output_dir,str(bg.batch_index+i)+'i')
 		    print(bg.batch_index+i,bg.batch_len)
 		batch = bg.get_batch_vec()	
 		
@@ -231,6 +232,11 @@ def main():
 		
 	elif train:
 	    start = time.time()
+	    bg = batch_generator(batch_size)
+	    bg.current_epoch = 12 
+	    bg.batch_index = 4804
+	    gv = 0
+	    lv = 0
 	    while bg.current_epoch<max_epoch:
 	        c = bg.current_epoch
 	        #progress = ProgressBar(bg.batch_len/bg.batch_size,fmt = ProgressBar.FULL)
@@ -254,13 +260,25 @@ def main():
 		        fetches["gen_loss_L1"] = model.gen_loss_L1	
 		
 		    results = sess.run(fetches,feed_dict = feed_dict)
-		
-		    print(results["discrim_loss"],results["gen_loss_GAN"],results['gen_loss_L1'],bg.current_epoch,bg.batch_index,time.time()-start,(time.time()-start)*(bg.batch_len-bg.batch_index)/batch_size*(max_epoch-bg.current_epoch-2)*batch_size)
+		    print(results["discrim_loss"],results["gen_loss_GAN"],results['gen_loss_L1'],gv,lv,bg.current_epoch,bg.batch_index,time.time()-start,(time.time()-start)*(bg.batch_len-bg.batch_index)/batch_size*(max_epoch-bg.current_epoch-2)*batch_size)
                     if should(summary_freq):
                         print("recording summary")
                         sv.summary_writer.add_summary(results["summary"], (bg.batch_index/bg.batch_size+bg.batch_len/batch_size*bg.current_epoch))
                     if should(save_freq):
                         print("saving model")
                         saver.save(sess, output_dir+"model.ckpt")
+		    if should(val_freq):
+		        bgv = batch_generator(batch_size,False)
+                        batchv = bgv.get_batch_vec()
+			gv = 0
+			lv = 0
+            		while bgv.current_epoch == 0 :
+                	    feed_dictv = {input:batchv['input'],target :batchv['target']}
+                	    predictions,lgan,l1 = sess.run([model.outputs,model.gen_loss_GAN,model.gen_loss_L1],feed_dict = feed_dictv)
+			    gv+=lgan
+			    lv+=l1
+			    batchv = bgv.get_batch_vec()
+                    	print("validation loss",gv,lv)
+                batch = bg.get_batch_vec()
 
 main()

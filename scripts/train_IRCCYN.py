@@ -13,23 +13,25 @@ from model import *
 import subprocess as sp
 
 
-Model = collections.namedtuple("Model", "outputs, predict_real, predict_fake, discrim_loss, discrim_grads_and_vars, gen_loss_GAN, gen_loss_L1, gen_grads_and_vars, train")
+Model = collections.namedtuple("Model", "outputs, predict_real, predict_fake, discrim_loss, discrim_grads_and_vars, gen_loss_GAN, gen_loss_cross, gen_loss_L1,gen_nss, gen_grads_and_vars, train")
 
 data_dir = '/scratch/kvg245/vidsal_gan/vidsal_gan/data/IRCCYN3D/'
-output_dir = '/scratch/kvg245/vidsal_gan/vidsal_gan/output/IRCCYN_30_l2_100_1/'
+output_dir = '/scratch/kvg245/vidsal_gan/vidsal_gan/output/IRCCYN_30_cross_10_1_single/'
 target_file = 'maps_data_saliency.h5'
 input_file = 'maps_data.h5'
 index_file = 'indices'
 
-train = True
+train = False
 overfit = False
-ckpt = False
-max_epoch = 30
+ckpt = True
+num_past =1 
+max_epoch = 200
 seed = 4
 num_frames = 4
 progress_freq = 1
 summary_freq = 100
 save_freq = 1000
+val_freq = 3000
 vid_dict ={0: u'src01_hrc00_s3840x1080p25n400.avi', 1: u'src02_hrc00_s3840x1080p25n400.avi', 2: u'src03_hrc00_s3840x1080p25n400.avi', 3: u'src04_hrc00_s3840x1080p25n400.avi', 4: u'src05_hrc00_s3840x1080p25n400.avi', 5: u'src06_hrc00_s3840x1080p25n400.avi', 6: u'src07_hrc00_s3840x1080p25n400.avi', 7: u'src08_hrc00_s3840x1080p25n325.avi', 8: u'src09_hrc00_s3840x1080p25n400.avi', 9: u'src10_hrc00_s3840x1080p25n400.avi', 10: u'src11_hrc00_s3840x1080p25n400.avi', 11: u'src12_hrc00_s3840x1080p25n400.avi', 12: u'src13_hrc00_s3840x1080p25n400.avi', 13: u'src14_hrc00_s3840x1080p25n400.avi', 14: u'src15_hrc00_s3840x1080p25n400.avi', 15: u'src16_hrc00_s3840x1080p25n400.avi', 16: u'src17_hrc00_s3840x1080p25n400.avi', 17: u'src18_hrc00_s3840x1080p25n400.avi', 18: u'src19_hrc00_s3840x1080p25n400.avi', 19: u'src20_hrc00_s3840x1080p25n400.avi', 20: u'src21_hrc00_s3840x1080p25n400.avi', 21: u'src22_hrc00_s3840x1080p25n400.avi', 22: u'src23_hrc00_s3840x1080p25n400.avi', 23: u'src24_hrc00_s3840x1080p25n400.avi', 24: u'src25_hrc00_s3840x1080p25n400.avi', 25: u'src26_hrc00_s3840x1080p25n400.avi', 26: u'src27_hrc00_s3840x1080p25n400.avi', 27: u'src28_hrc00_s3840x1080p25n400.avi', 28: u'src29_hrc00_s3840x1080p25n400.avi', 29: u'src30_hrc00_s3840x1080p25n400.avi', 30: u'src31_hrc00_s3840x1080p25n400.avi', 31: u'src32_hrc00_s3840x1080p25n400.avi', 32: u'src33_hrc00_s3840x1080p25n400.avi', 33: u'src34_hrc00_s3840x1080p25n400.avi', 34: u'src35_hrc00_s3840x1080p25n400.avi', 35: u'src36_hrc00_s3840x1080p25n400.avi', 36: u'src37_hrc00_s3840x1080p25n400.avi', 37: u'src38_hrc00_s3840x1080p25n400.avi', 38: u'src39_hrc00_s3840x1080p25n400.avi', 39: u'src40_hrc00_s3840x1080p25n400.avi', 40: u'src41_hrc00_s3840x1080p25n400.avi', 41: u'src42_hrc00_s3840x1080p25n400.avi', 42: u'src43_hrc00_s3840x1080p25n400.avi', 43: u'src44_hrc00_s3840x1080p25n400.avi', 44: u'src45_hrc00_s3840x1080p25n400.avi', 45: u'src46_hrc00_s3840x1080p25n400.avi', 46: u'src47_hrc00_s3840x1080p25n400.avi'}
 
 target_dict = {0: u'src01_hrc00_s1920x1080p25n400.avi', 1: u'src02_hrc00_s1920x1080p25n400.avi', 2: u'src03_hrc00_s1920x1080p25n400.avi', 3: u'src04_hrc00_s1920x1080p25n400.avi', 4: u'src05_hrc00_s1920x1080p25n400.avi', 5: u'src06_hrc00_s1920x1080p25n400.avi', 6: u'src07_hrc00_s1920x1080p25n400.avi', 7: u'src08_hrc00_s1920x1080p25n325.avi', 8: u'src09_hrc00_s1920x1080p25n400.avi', 9: u'src10_hrc00_s1920x1080p25n400.avi', 10: u'src11_hrc00_s1920x1080p25n400.avi', 11: u'src12_hrc00_s1920x1080p25n400.avi', 12: u'src13_hrc00_s1920x1080p25n400.avi', 13: u'src14_hrc00_s1920x1080p25n400.avi', 14: u'src15_hrc00_s1920x1080p25n400.avi', 15: u'src16_hrc00_s1920x1080p25n400.avi', 16: u'src17_hrc00_s1920x1080p25n400.avi', 17: u'src18_hrc00_s1920x1080p25n400.avi', 18: u'src19_hrc00_s1920x1080p25n400.avi', 19: u'src20_hrc00_s1920x1080p25n400.avi', 20: u'src21_hrc00_s1920x1080p25n400.avi', 21: u'src22_hrc00_s1920x1080p25n400.avi', 22: u'src23_hrc00_s1920x1080p25n400.avi', 23: u'src24_hrc00_s1920x1080p25n400.avi', 24: u'src25_hrc00_s1920x1080p25n400.avi', 25: u'src26_hrc00_s1920x1080p25n400.avi', 26: u'src27_hrc00_s1920x1080p25n400.avi', 27: u'src28_hrc00_s1920x1080p25n400.avi', 28: u'src29_hrc00_s1920x1080p25n400.avi', 29: u'src30_hrc00_s1920x1080p25n400.avi', 30: u'src31_hrc00_s1920x1080p25n400.avi', 31: u'src32_hrc00_s1920x1080p25n400.avi', 32: u'src33_hrc00_s1920x1080p25n400.avi', 33: u'src34_hrc00_s1920x1080p25n400.avi', 34: u'src35_hrc00_s1920x1080p25n400.avi', 35: u'src36_hrc00_s1920x1080p25n400.avi', 36: u'src37_hrc00_s1920x1080p25n400.avi', 37: u'src38_hrc00_s1920x1080p25n400.avi', 38: u'src39_hrc00_s1920x1080p25n400.avi', 39: u'src40_hrc00_s1920x1080p25n400.avi', 40: u'src41_hrc00_s1920x1080p25n400.avi', 41: u'src42_hrc00_s1920x1080p25n400.avi', 42: u'src43_hrc00_s1920x1080p25n400.avi', 43: u'src44_hrc00_s1920x1080p25n400.avi', 44: u'src45_hrc00_s1920x1080p25n400.avi', 45: u'src46_hrc00_s1920x1080p25n400.avi', 46: u'src47_hrc00_s1920x1080p25n400.avi'}
@@ -38,9 +40,9 @@ class batch_generator:
     """Provides batches of input and target files with training indices
        Also opens h5 datasets"""
     
-    def __init__( self,batch_size = 8):
+    def __init__( self,batch_size = 8,istrain = True):
     	self.batch_size = batch_size
-	
+	self.istrain = istrain
 	self.index_data,self.target_data,self.input_data = self.open_files()
 	self.batch_len = len(self.index_data)
         self.current_epoch = None
@@ -53,12 +55,12 @@ class batch_generator:
             val_list = [6,13,20,34,41]
 	    index_data = []
 	    for a in index_raw:
-		if train and a[0] not in val_list:
+		if self.istrain and a[0] not in val_list:
 		    index_data.append(a)
-		elif not train and a[0] in val_list:
+		elif not self.istrain and a[0] in val_list:
 		    index_data.append(a)
-	    index_data = shuffled(index_data)
-	print len(index_data)
+	    index_data = index_data
+	print len(index_data)	
 	input_list = []
 	target_list = []
 
@@ -82,7 +84,7 @@ class batch_generator:
 	for data in data_list:
     	    video =  self.input_data[vid_dict[data[0]]][:]
 	    target = self.target_data[target_dict[data[0]]][:]
-	    frames = np.asarray([video[x] for x in data[1:]])
+	    frames = np.asarray(video[data[1]])
 	    maps = np.asarray(target[data[1]])
 	    input_batch.append(frames)
 	    target_batch.append(maps)
@@ -91,12 +93,12 @@ class batch_generator:
 #	progress.done()
 	target_batch = np.asarray(target_batch)/255.0
 	input_batch = np.asarray(input_batch)
-	dummy = np.zeros((input_batch.shape[0],input_batch.shape[2],input_batch.shape[3],input_batch.shape[1]*input_batch.shape[4]))
-	dummy[:,:,:,:3] = input_batch[:,0,:,:,:]
-	dummy[:,:,:,3:6] = input_batch[:,1,:,:,:]
-	dummy[:,:,:,6:9] = input_batch[:,2,:,:,:]
-	dummy[:,:,:,9:] = input_batch[:,3,:,:,:]
-	return {'input':dummy,'target':np.reshape(target_batch,(target_batch.shape[0],target_batch.shape[1],target_batch.shape[2],1))}
+	#dummy = np.zeros((input_batch.shape[0],input_batch.shape[2],input_batch.shape[3],input_batch.shape[1]*input_batch.shape[4]))
+	#dummy[:,:,:,:3] = input_batch[:,0,:,:,:]
+	#dummy[:,:,:,3:6] = input_batch[:,1,:,:,:]
+	#dummy[:,:,:,6:9] = input_batch[:,2,:,:,:]
+	#dummy[:,:,:,9:] = input_batch[:,3,:,:,:]
+	return {'input':np.reshape(input_batch,(input_batch.shape[0],input_batch.shape[1],input_batch.shape[2],input_batch.shape[3])),'target':np.reshape(target_batch,(target_batch.shape[0],target_batch.shape[1],target_batch.shape[2],1))}
 		
     def get_batch_vec(self):
 	"""Provides batch of data to process and keeps 
@@ -126,11 +128,11 @@ def main():
     tf.set_random_seed(seed)
     np.random.seed(seed)
     random.seed(seed)
-    bg = batch_generator(batch_size)
+    
     	
     #examples = bg.get_batch_vec()
     #print examples['input'].shape , examples['target'].shape
-    input = tf.placeholder(dtype = tf.float32,shape = (batch_size,256,256,12))
+    input = tf.placeholder(dtype = tf.float32,shape = (batch_size,256,256,num_past*3))
     target = tf.placeholder(dtype = tf.float32, shape = (batch_size,256,256,1))
     #examples = {'input':np.zeros((1,256,256,12)),'target':np.zeros((1,256,256,1))}
      
@@ -145,7 +147,8 @@ def main():
     tf.summary.scalar("discriminator_loss", model.discrim_loss)
     tf.summary.scalar("generator_loss_GAN", model.gen_loss_GAN)
     tf.summary.scalar("generator_loss_L1", model.gen_loss_L1)
-
+    tf.summary.scalar("generator_loss_cross",model.gen_loss_cross)
+    tf.summary.scalar("generator_nss",model.gen_nss)
     for var in tf.trainable_variables():
         tf.summary.histogram(var.op.name + "/values", var)
 
@@ -165,29 +168,37 @@ def main():
 		
         if ckpt:
             print("loading model from checkpoint")
+	    print(output_dir)
             checkpoint = tf.train.latest_checkpoint(output_dir)
 	    restore_saver.restore(sess,checkpoint)
             
 	if not train:
-	    bg = batch_generator(batch_size)
+	    bg = batch_generator(batch_size,False)
 	    
 	    batch = bg.get_batch_vec()
+	    tn =0 
+	    k =0
 	    while bg.current_epoch == 0 :
 		feed_dict = {input:batch['input'],target :batch['target']}
-		predictions = sess.run(model.outputs,feed_dict = feed_dict)
+		predictions,nss = sess.run([model.outputs,model.gen_nss],feed_dict = feed_dict)
+		
 		for i in range(batch_size):
+		    k+=1
 		    p = predictions[i,:,:,:]*255.0
 		    t = batch['target'][i,:,:,:]*255.0
-		    print np.sort(p.reshape(256*256))
-		    n = batch['input'][i,:,:,0:3]
+		    n = batch['input'][i,:,:,0:2]
+		    pss = p[:,:,0]
+		    tss = t[:,:,0] 
+		    npnss = kld(pss,tss)
+		    tn+=npnss
 		    #save_image(p,output_dir,str(bg.batch_index+i)+'p')
-                   #save_image(t,output_dir,str(bg.batch_index+i)+'t')
+                    #save_image(t,output_dir,str(bg.batch_index+i)+'t')
                     #save_image(n,output_dir,str(bg.batch_index+i)+'i')
-		    print(bg.batch_index+i,bg.batch_len)
+		    print(nss,npnss,tn/k,bg.batch_index+i,bg.batch_len)
 		batch = bg.get_batch_vec()	
 		
 	elif overfit:
-	    bg = batch_generator(batch_size)
+	    bg = batch_generator(batch_size,False)
 	    batch = bg.get_batch_vec()
 	    feed_dict = {input:batch['input'],target :batch['target']} 
 	    for i in range(max_epoch):
@@ -207,10 +218,12 @@ def main():
                     fetches["discrim_loss"] = model.discrim_loss
                     fetches["gen_loss_GAN"] = model.gen_loss_GAN
                     fetches["gen_loss_L1"] = model.gen_loss_L1
+		    fetches["gen_nss"] = model.gen_nss
+		    fetches["gen_loss_cross"] = model.gen_loss_cross
 
                 results = sess.run(fetches,feed_dict = feed_dict)
 
-                print(results["discrim_loss"],results["gen_loss_GAN"],results['gen_loss_L1'],i)
+                print(results["discrim_loss"],results["gen_loss_GAN"],results['gen_loss_L1'],results['gen_loss_cross'],results["gen_nss"],i)
                 if should(summary_freq):
                    print("recording summary")
                    sv.summary_writer.add_summary(results["summary"], i)
@@ -232,6 +245,9 @@ def main():
 		
 	elif train:
 	    start = time.time()
+	    bg = batch_generator(batch_size)
+	    gv =0
+            lv =0 
 	    while bg.current_epoch<max_epoch:
 	        c = bg.current_epoch
 	        #progress = ProgressBar(bg.batch_len/bg.batch_size,fmt = ProgressBar.FULL)
@@ -252,16 +268,33 @@ def main():
 		    if should(progress_freq):
                         fetches["discrim_loss"] = model.discrim_loss
                         fetches["gen_loss_GAN"] = model.gen_loss_GAN
-		        fetches["gen_loss_L1"] = model.gen_loss_L1	
+		        fetches["gen_loss_L1"] = model.gen_loss_L1
+			fetches["gen_loss_cross"] = model.gen_loss_cross
+			fetches["gen_nss"] = model.gen_nss	
 		
 		    results = sess.run(fetches,feed_dict = feed_dict)
 		
-		    print(results["discrim_loss"],results["gen_loss_GAN"],results['gen_loss_L1'],bg.current_epoch,bg.batch_index,time.time()-start,(time.time()-start)*(bg.batch_len-bg.batch_index)/batch_size*(max_epoch-bg.current_epoch-2)*batch_size)
+		    print(results["discrim_loss"],results["gen_loss_GAN"],results['gen_loss_L1'],results['gen_loss_cross'],results['gen_nss'],gv,lv,bg.current_epoch,bg.batch_index,time.time()-start,(time.time()-start)*(bg.batch_len-bg.batch_index)/batch_size*(max_epoch-bg.current_epoch-2)*batch_size)
                     if should(summary_freq):
                         print("recording summary")
                         sv.summary_writer.add_summary(results["summary"], (bg.batch_index/bg.batch_size+bg.batch_len/batch_size*bg.current_epoch))
                     if should(save_freq):
                         print("saving model")
                         saver.save(sess, output_dir+"model.ckpt")
+		    if should(val_freq):
+                        bgv = batch_generator(batch_size,False)
+                        batchv = bgv.get_batch_vec()
+                        gv = 0
+                        lv = 0
+			cv = 0
+                        while bgv.current_epoch == 0 :
+                            feed_dictv = {input:batchv['input'],target :batchv['target']}
+                            predictions,lgan,l1,cross = sess.run([model.outputs,model.gen_loss_GAN,model.gen_loss_L1,model.gen_loss_cross],feed_dict = feed_dictv)
+                            gv+=lgan
+                            lv+=l1
+			    cv+=cross
+			    batchv = bgv.get_batch_vec()
+                        print("validation loss",gv,lv)
+
 
 main()
