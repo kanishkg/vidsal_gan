@@ -9,10 +9,10 @@ Examples = collections.namedtuple("Examples", "paths, inputs, targets, count, st
 Model = collections.namedtuple("Model", "outputs, predict_real, predict_fake, discrim_loss, discrim_grads_and_vars, gen_loss_GAN,gen_loss_cross, gen_loss_L1,gen_nss, gen_grads_and_vars, train")
 
 EPS = 1e-12
-lr = 0.0002
+lr = 0.002
 beta1 = 0.5
 l1_weight = 0.0
-gan_weight = 0.0
+gan_weight = 0.01
 cross_weight = 1.0
 
 vgg19_npy_path = '/scratch/kvg245/vidsal_gan/vidsal_gan/data/vgg19.npy'
@@ -20,7 +20,7 @@ vgg19_npy_path = '/scratch/kvg245/vidsal_gan/vidsal_gan/data/vgg19.npy'
 def vgg_encoder(inputs):
     if vgg19_npy_path is not None:
 	data_dict = np.load(vgg19_npy_path, encoding='latin1').item()
-    
+    data_dict = {}
     with tf.variable_scope('encoder_1'):
     	conv1_1 = conv_layer(data_dict,inputs, 3, 64, "conv1_1")
     	conv1_2 = conv_layer(data_dict,conv1_1, 64, 64, "conv1_2")
@@ -180,7 +180,7 @@ def create_model(inputs, targets):
         # predict_fake => 1
         # abs(targets - outputs) => 0
         gen_loss_GAN = tf.reduce_mean(-tf.log(predict_fake + EPS))
-	gen_loss_L1 = tf.reduce_mean(tf.square(targets - outputs))
+	gen_loss_L1 = tf.reduce_mean(tf.abs(targets - tf.sigmoid(outputs)))
 	#gen_loss_cross = -tf.reduce_mean(targets*tf.log(outputs+EPS)+(1-targets)*tf.log(1-outputs+EPS))
 	gen_loss_cross = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels = targets,logits = outputs))
 	maps = tf.map_fn(lambda img: tf.image.per_image_standardization(img), targets)
@@ -189,7 +189,7 @@ def create_model(inputs, targets):
 
     with tf.name_scope("discriminator_train"):
         discrim_tvars = [var for var in tf.trainable_variables() if var.name.startswith("discriminator")]
-        discrim_optim = tf.train.AdamOptimizer(lr, beta1)
+        discrim_optim = tf.train.AdamOptimizer(lr*0.1, beta1)
         discrim_grads_and_vars = discrim_optim.compute_gradients(discrim_loss, var_list=discrim_tvars)
         discrim_train = discrim_optim.apply_gradients(discrim_grads_and_vars)
 
@@ -215,7 +215,7 @@ def create_model(inputs, targets):
         gen_loss_L1=gen_loss_L1,
 	gen_nss = gen_nss,
         gen_grads_and_vars=gen_grads_and_vars,
-        outputs=outputs,
+        outputs=tf.sigmoid(outputs),
         train=tf.group(update_losses,incr_global_step, gen_train),
     )
 

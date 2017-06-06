@@ -16,13 +16,13 @@ import subprocess as sp
 Model = collections.namedtuple("Model", "outputs, predict_real, predict_fake, discrim_loss, discrim_grads_and_vars, gen_loss_GAN, gen_loss_cross, gen_loss_L1,gen_nss, gen_grads_and_vars, train")
 
 data_dir = '/scratch/kvg245/vidsal_gan/vidsal_gan/data/IRCCYN3D/'
-output_dir = '/scratch/kvg245/vidsal_gan/vidsal_gan/output/vggtest/'
+output_dir = '/scratch/kvg245/vidsal_gan/vidsal_gan/output/vggfin/'
 target_file = 'maps_data_saliency_224.h5'
 input_file = 'maps_data_224.h5'
 index_file = 'indices'
 
 train = True
-overfit = True
+overfit = False
 ckpt = False
 num_past =1 
 max_epoch = 300
