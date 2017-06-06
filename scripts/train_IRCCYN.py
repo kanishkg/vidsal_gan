@@ -178,9 +178,10 @@ def main():
 	    batch = bg.get_batch_vec()
 	    tn =0 
 	    k =0
+	    tnss = 0
 	    while bg.current_epoch == 0 :
 		feed_dict = {input:batch['input'],target :batch['target']}
-		predictions,nss = sess.run([model.outputs,model.gen_nss],feed_dict = feed_dict)
+		predictions,_ = sess.run([model.outputs,model.gen_nss],feed_dict = feed_dict)
 		
 		for i in range(batch_size):
 		    k+=1
@@ -189,12 +190,14 @@ def main():
 		    n = batch['input'][i,:,:,0:2]
 		    pss = p[:,:,0]
 		    tss = t[:,:,0] 
-		    npnss = kld(pss,tss)
-		    tn+=npnss
+		    kl = kld(pss,tss)
+		    nss = nss_calc(tss,tss)
+		    tnss+= nss
+		    tn+=kl
 		    #save_image(p,output_dir,str(bg.batch_index+i)+'p')
                     #save_image(t,output_dir,str(bg.batch_index+i)+'t')
                     #save_image(n,output_dir,str(bg.batch_index+i)+'i')
-		    print(nss,npnss,tn/k,bg.batch_index+i,bg.batch_len)
+		    print(nss,tnss/k,kl,tn/k,bg.batch_index+i,bg.batch_len)
 		batch = bg.get_batch_vec()	
 		
 	elif overfit:
