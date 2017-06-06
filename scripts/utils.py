@@ -17,6 +17,19 @@ import sys
 import re
 
 
+
+def nss_calc(gtsAnn, resAnn):
+
+    salMap = (resAnn - np.mean(resAnn))/255.0
+    if np.max(salMap) > 0:
+	salMap = salMap / np.std(salMap)
+    gtsAnn = np.sign(gtsAnn/255.0)
+    a = np.multiply(gtsAnn,resAnn)
+    
+    return np.sum(a)/np.count_nonzero(a)
+
+
+
 def kld(pred,target):
     q = pred
     q /= np.sum(pred.flatten())
@@ -27,32 +40,7 @@ def kld(pred,target):
     kl = np.sum(p*(np.log2(p/q)))
     return kl
  
-def nss_model(prediction, fm):
-    """
-    wraps nss functionality for model evaluation
     
-    input:
-        prediction: 2D matrix
-            the model salience map
-        fm : fixmat
-            Fixations that define the actuals
-    """
-    (r_y, r_x) = (1,1)
-    fix = ((np.array(fm.y-1)*r_y).astype(int),
-                            (np.array(fm.x-1)*r_x).astype(int))
-    return nss(prediction, fix)
-
-
-def nss(prediction, fix):
-    """
-    Compute the normalized scanpath salience
-    input:
-        fix : list, l[0] contains y, l[1] contains x
-    """
-
-    prediction = prediction - np.mean(prediction)
-    prediction = prediction / np.std(prediction)
-    return np.mean(prediction[fix[0], fix[1]])
 
 
 
@@ -105,6 +93,55 @@ class ProgressBar(object):
         self()
         print('', file=self.output)
 
+
+def lrelu(x, a):
+    with tf.name_scope("lrelu"):
+        # adding these together creates the leak part and linear part
+        # then cancels them out by subtracting/adding an absolute value term
+        # leak: a*x/2 - a*abs(x)/2
+        # linear: x/2 + abs(x)/2
+
+        # this block looks like it has 2 inputs on the graph unless we do this
+        x = tf.identity(x)
+        return (0.5 * (1 + a)) * x + (0.5 * (1 - a)) * tf.abs(x)
+
+
+
+
+def get_var(data_dict,initial_value, name, idx, var_name):
+    if data_dict is not None and name in data_dict:
+        value = data_dict[name[-7:]][idx]
+    else:
+	value = initial_value
+    var = tf.Variable(value, name=var_name)
+    return var
+
+def get_conv_var(data_dict, filter_size, in_channels, out_channels, name):
+        initial_value = tf.truncated_normal([filter_size, filter_size, in_channels, out_channels], 0.0, 0.001)
+        filters = get_var(data_dict,initial_value, name, 0, name + "_filters")
+
+        initial_value = tf.truncated_normal([out_channels], .0, .001)
+        biases = get_var(data_dict,initial_value, name, 1, name + "_biases")
+
+        return filters, biases
+
+def conv_layer(data_dict,bottom, in_channels, out_channels, name):
+    with tf.variable_scope(name):
+	filt, conv_biases = get_conv_var(data_dict,3, in_channels, out_channels, name)
+
+	conv = tf.nn.conv2d(bottom, filt, [1, 1, 1, 1], padding='SAME')
+	bias = tf.nn.bias_add(conv, conv_biases)
+	relu = lrelu(bias,0.2)
+
+	return relu
+
+def max_pool( bottom, name):
+    return tf.nn.max_pool(bottom, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME', name=name)
+
+
+
+
+
 def conv(batch_input, out_channels, stride):
     """Convoluton with filter size 4 x 4 x in_channels x out_channels 
 	and padding valid"""
@@ -117,11 +154,11 @@ def conv(batch_input, out_channels, stride):
         conv = tf.nn.conv2d(padded_input, filter, [1, stride, stride, 1], padding="VALID")
         return conv
 
-def conv11(batch_input, stride=1):
+def conv11(batch_input,out_channels=1, stride=1):
 
     with tf.variable_scope("conv11"):
         in_channels = batch_input.get_shape()[3]
-	out_channels = in_channels
+	
         filter = tf.get_variable("filter", [1, 1, in_channels, out_channels], dtype=tf.float32, initializer=tf.random_normal_initializer(0, 0.02))
         # [batch, in_height, in_width, in_channels], [filter_width, filter_height, in_channels, out_channels]
         #     => [batch, out_height, out_width, out_channels]
@@ -143,26 +180,41 @@ def lrelu(x, a):
 
 
 def batchnorm(input):
-    with tf.variable_scope("batchnorm"):
-        # this block looks like it has 3 inputs on the graph unless we do this
-        input = tf.identity(input)
+   input = tf.identity(input)
 
-        channels = input.get_shape()[3]
-        offset = tf.get_variable("offset", [channels], dtype=tf.float32, initializer=tf.zeros_initializer())
-        scale = tf.get_variable("scale", [channels], dtype=tf.float32, initializer=tf.random_normal_initializer(1.0, 0.02))
-        mean, variance = tf.nn.moments(input, axes=[0, 1, 2], keep_dims=False)
-        variance_epsilon = 1e-5
-        normalized = tf.nn.batch_normalization(input, mean, variance, offset, scale, variance_epsilon=variance_epsilon)
-        return normalized
+   channels = input.get_shape()[3]
+   offset = tf.get_variable("offset", [channels], dtype=tf.float32, initializer=tf.zeros_initializer())
+   scale = tf.get_variable("scale", [channels], dtype=tf.float32, initializer=tf.random_normal_initializer(1.0, 0.02))
+   mean, variance = tf.nn.moments(input, axes=[0, 1, 2], keep_dims=False)
+   variance_epsilon = 1e-5
+   normalized = tf.nn.batch_normalization(input, mean, variance, offset, scale, variance_epsilon=variance_epsilon)
 
-def deconv(batch_input, out_channels):
+def deconv(batch_input, out_channels,filter_size = 4):
     with tf.variable_scope("deconv"):
         batch, in_height, in_width, in_channels = [int(d) for d in batch_input.get_shape()]
-        filter = tf.get_variable("filter", [4, 4, out_channels, in_channels], dtype=tf.float32, initializer=tf.random_normal_initializer(0, 0.02))
+        filter = tf.get_variable("filter", [filter_size, filter_size, out_channels, in_channels], dtype=tf.float32, initializer=tf.random_normal_initializer(0, 0.02))
         # [batch, in_height, in_width, in_channels], [filter_width, filter_height, out_channels, in_channels]
         #     => [batch, out_height, out_width, out_channels]
         conv = tf.nn.conv2d_transpose(batch_input, filter, [batch, in_height * 2, in_width * 2, out_channels], [1, 2, 2, 1], padding="SAME")
         return conv
+
+def deconv_layer(batch_input, out_channels,filter_size,stride,name):
+    with tf.variable_scope(name):
+        batch, in_height, in_width, in_channels = [int(d) for d in batch_input.get_shape()]
+        filter = tf.get_variable("filter", [filter_size, filter_size, out_channels, in_channels], dtype=tf.float32, initializer=tf.random_normal_initializer(0, 0.02))
+        conv = tf.nn.conv2d_transpose(batch_input, filter, [batch, in_height * stride, in_width * stride, out_channels], [1, stride, stride, 1], padding="SAME")
+        bias = tf.truncated_normal([out_channels], .0, .001)
+	conv = tf.nn.relu(tf.nn.bias_add(conv,bias))
+        return conv
+
+
+
+
+
+
+
+
+
 
 def rgb_to_lab(srgb):
     with tf.name_scope("rgb_to_lab"):
