@@ -12,7 +12,7 @@ EPS = 1e-12
 lr = 0.002
 beta1 = 0.5
 l1_weight = 0.0
-gan_weight = 0.01
+gan_weight = 0.0
 cross_weight = 1.0
 
 vgg19_npy_path = '/scratch/kvg245/vidsal_gan/vidsal_gan/data/vgg19.npy'
@@ -20,7 +20,7 @@ vgg19_npy_path = '/scratch/kvg245/vidsal_gan/vidsal_gan/data/vgg19.npy'
 def vgg_encoder(inputs):
     if vgg19_npy_path is not None:
 	data_dict = np.load(vgg19_npy_path, encoding='latin1').item()
-    data_dict = {}
+    
     with tf.variable_scope('encoder_1'):
     	conv1_1 = conv_layer(data_dict,inputs, 3, 64, "conv1_1")
     	conv1_2 = conv_layer(data_dict,conv1_1, 64, 64, "conv1_2")
@@ -69,7 +69,8 @@ def vgg_decoder(layers):
     
     with tf.variable_scope('decoder_2'):
         deconv2_1 = deconv_layer(tf.concat([layers[-1],layers[3]],axis=3),256,3,1,"deconv2_1")
-        deconv2_2 = deconv_layer(deconv2_1,256,3,1,"deconv2_2")
+        #deconv2_1 = deconv_layer(layers[-1],256,3,1,"deconv2_1")
+	deconv2_2 = deconv_layer(deconv2_1,256,3,1,"deconv2_2")
         deconv2_3 = deconv_layer(deconv2_2,256,3,1,"deconv2_3")
         deconv2_4 = deconv_layer(deconv2_3,256,3,2,"deconv2_4")
  	out = tf.contrib.slim.batch_norm(deconv2_4)
@@ -78,7 +79,8 @@ def vgg_decoder(layers):
 
     with tf.variable_scope('decoder_3'):
         deconv3_1 = deconv_layer(tf.concat([layers[-1],layers[2]],axis=3),128,3,1,"deconv3_1")
-        deconv3_2 = deconv_layer(deconv3_1,128,3,1,"deconv3_2")
+        #deconv3_1 = deconv_layer(layers[-1],128,3,1,"deconv3_1")
+	deconv3_2 = deconv_layer(deconv3_1,128,3,1,"deconv3_2")
         deconv3_3 = deconv_layer(deconv3_2,128,3,1,"deconv3_3")
         deconv3_4 = deconv_layer(deconv3_3,128,3,2,"deconv3_4")
         out = tf.contrib.slim.batch_norm(deconv3_4)
@@ -87,14 +89,17 @@ def vgg_decoder(layers):
 
     with tf.variable_scope('decoder_4'):
         deconv4_1 = deconv_layer(tf.concat([layers[-1],layers[1]],axis=3),64,3,1,"deconv4_1")
-        deconv4_2 = deconv_layer(deconv4_1,64,3,2,"deconv4_2")
+        #deconv4_1 = deconv_layer(layers[-1],64,3,1,"deconv4_1")
+	deconv4_2 = deconv_layer(deconv4_1,64,3,2,"deconv4_2")
         out = tf.contrib.slim.batch_norm(deconv4_2)
         out = tf.nn.dropout(out,1.0)
         layers.append(out)
 
     with tf.variable_scope('decoder_5'):
-        deconv5_1 = deconv_layer(tf.concat([layers[-1],layers[0]],axis=3),3,3,1,"deconv5_1")
-        deconv5_2 = deconv_layer(deconv5_1,3,3,1,"deconv5_2")
+        deconv5_1 = deconv_layer(tf.concat([layers[-1],layers[0]],axis=3),32,3,1,"deconv5_1")
+	#deconv5_1 = deconv_layer(layers[-1],64,3,1,"deconv5_1")
+
+        deconv5_2 = deconv_layer(deconv5_1,32,3,1,"deconv5_2")
         out = tf.nn.dropout(deconv5_2,1.0)
 	output = conv11(out)
         
@@ -122,9 +127,9 @@ def create_generator(generator_inputs, generator_outputs_channels):
 
 def create_model(inputs, targets):
     def create_discriminator(discrim_inputs, discrim_targets):
-        n_layers = 3
+        n_layers = 2
         layers = []
-	ndf = 64 # numer of discriminator filters
+	ndf = 32 # numer of discriminator filters
 
         # 2x [batch, height, width, in_channels] => [batch, height, width, in_channels * 2]
         input = tf.concat([discrim_inputs, discrim_targets], axis=3)
@@ -168,7 +173,7 @@ def create_model(inputs, targets):
     with tf.name_scope("fake_discriminator"):
         with tf.variable_scope("discriminator", reuse=True):
             # 2x [batch, height, width, channels] => [batch, 30, 30, 1]
-            predict_fake = create_discriminator(inputs, outputs)
+            predict_fake = create_discriminator(inputs, tf.sigmoid(outputs))
 
     with tf.name_scope("discriminator_loss"):
         # minimizing -tf.log will try to get inputs to 1

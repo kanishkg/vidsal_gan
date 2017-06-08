@@ -6,7 +6,7 @@ from __future__ import print_function
 import tensorflow as tf
 import numpy as np
 import scipy.misc
-
+import matplotlib.pyplot as plt
 import os
 import glob
 import random
@@ -53,6 +53,12 @@ def shuffled(x):
 def save_image (image,output_dir,filename):
     import cv2
     cv2.imwrite(output_dir+filename+'.png', image)
+    return
+
+
+def save_image2 (image,output_dir,filename):
+    
+    plt.imsave(output_dir+filename+'.png', image)
     return
 
 

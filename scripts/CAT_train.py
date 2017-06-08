@@ -16,7 +16,7 @@ import subprocess as sp
 Model = collections.namedtuple("Model", "outputs, predict_real, predict_fake, discrim_loss, discrim_grads_and_vars, gen_loss_GAN, gen_loss_cross, gen_loss_L1,gen_nss, gen_grads_and_vars, train")
 
 data_dir = '/scratch/kvg245/vidsal_gan/vidsal_gan/data/CAT/trainSet/'
-output_dir = '/scratch/kvg245/vidsal_gan/vidsal_gan/output/CAT1_0F/'
+output_dir = '/scratch/kvg245/vidsal_gan/vidsal_gan/output/CAT1_0e-2Fskip/'
 target_file = 'fixation.npy'
 input_file = 'inputs.npy'
 
@@ -24,8 +24,8 @@ input_file = 'inputs.npy'
 train = True
 overfit = False
 ckpt = False
-num_past =1 
-max_epoch = 20
+num_past =1
+max_epoch = 300
 seed = 4
 num_frames = 4
 progress_freq = 1
@@ -253,13 +253,21 @@ def main():
 		    if should(val_freq):
                         bgv = batch_generator(batch_size,False)
                         batchv = bgv.get_batch_vec()
+			bgv.current_epoch = 0
                         gv = 0
                         lv = 0
 			cv = 0
                         while bgv.current_epoch == 0 :
                             feed_dictv = {input:batchv['input'],target :batchv['target']}
                             predictions,lgan,l1,cross = sess.run([model.outputs,model.gen_loss_GAN,model.gen_loss_L1,model.gen_loss_cross],feed_dict = feed_dictv)
-                            gv+=lgan
+                            for i in range(batch_size):
+                		p = predictions[i,:,:,:]*255.0
+                		t = batchv['target'][i,:,:,:]*255.0
+                		n = batchv['input'][i,:,:,0:3]
+                		save_image(p,output_dir,str(bgv.batch_index+i)+'p')
+                		save_image(t,output_dir,str(bgv.batch_index+i)+'t')
+                		save_image(n,output_dir,str(bgv.batch_index+i)+'i')
+			    gv+=lgan
                             lv+=l1
 			    cv+=cross
 			    batchv = bgv.get_batch_vec()
