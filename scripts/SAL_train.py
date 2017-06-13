@@ -6,34 +6,34 @@ import pickle
 import numpy  as np
 import tensorflow as tf
 import matplotlib.pyplot as plt
-
+from salicon.salicon import SALICON
 from utils import *
 from vgg_model import *
-
+from eval import *
 import subprocess as sp
-
+import cv2
 
 Model = collections.namedtuple("Model", "outputs, predict_real, predict_fake, discrim_loss, discrim_grads_and_vars, gen_loss_GAN, gen_loss_cross, gen_loss_L1,gen_nss, gen_grads_and_vars, train")
 
 data_dir = '/scratch/kvg245/vidsal_gan/vidsal_gan/data/salicon-api/'
-output_dir = '/scratch/kvg245/vidsal_gan/vidsal_gan/output/SAL1_0Skip1/'
-train_target_file = 'train.npy'
-train_input_file = 'train_inputs.npy'
-val_target_file = 'val.npy'
-val_input_file = 'val_inputs.npy'
+output_dir = '/scratch/kvg245/vidsal_gan/vidsal_gan/output/2SAL20_1/'
+train_target_file = 'train2.npy'
+train_input_file = 'train_input.npy'
+val_target_file = 'val2.npy'
+val_input_file = 'val_input.npy'
 
 
 train = True
 overfit = False
 ckpt = False
 num_past =1
-max_epoch =300 
+max_epoch =300
 seed =4
 num_frames = 4
 progress_freq = 1
 summary_freq = 200
 save_freq = 2499
-val_freq = 2499*3
+val_freq = 5
 
 
 class batch_generator:
@@ -41,23 +41,26 @@ class batch_generator:
     def __init__( self,batch_size = 8,istrain = True):
     	self.batch_size = batch_size
 	self.istrain = istrain
-	self.index_data,self.val_target_data,self.val_input_data, self.train_target_data,self.train_input_data = self.open_files()
+	self.index_data,self.target_data,self.input_data = self.open_files()
 	
-	if not istrain:
-	    self.index_data = shuffled(list(range(5000)))
 	self.batch_len = len(self.index_data)    
         self.current_epoch = None
         self.batch_index = None
 
     def open_files(self):
-        index_list = shuffled(list(range(10000)))
-	
-	train_target_data = np.load(data_dir+train_target_file)
-	train_input_data = np.load(data_dir+train_input_file)
-	val_target_data = np.load(data_dir+val_target_file)
-        val_input_data = np.load(data_dir+val_input_file)
 
-	return index_list,val_target_data,train_input_data,train_target_data, train_input_data
+	if self.istrain:
+       	    index_list = shuffled(list(range(10000)))
+	    target_data = np.load(data_dir+train_target_file)
+	    input_data = np.load(data_dir+train_input_file)
+	else:
+	    index_list  = list(range(5000))
+	    print("loading val tar")
+	    target_data = np.load(data_dir+val_target_file)
+	    print("loading val in")
+            input_data = np.load(data_dir+val_input_file)
+
+	return index_list,target_data,input_data
 
     def create_batch(self, data_list):
 	"""Creates and returns a batch of input and output data"""
@@ -65,12 +68,9 @@ class batch_generator:
 	target_batch = []
 	
 	for index in data_list:
-	    if self.istrain:
-	    	input_batch.append(self.train_input_data[index,:,:,:])
-	    	target_batch.append(self.train_target_data[index,:,:])
-	    else:
-		input_batch.append(self.val_input_data[index,:,:,:])
-                target_batch.append(self.val_target_data[index,:,:])
+	    
+	    input_batch.append(self.input_data[index,:,:,:])
+	    target_batch.append(self.target_data[index,:,:])
 
 
 	target_batch = np.asarray(target_batch)
@@ -150,10 +150,28 @@ def main():
 	    restore_saver.restore(sess,checkpoint)
             
 	if not train:
+	    ann_file = '/scratch/kvg245/vidsal_gan/vidsal_gan/data/salicon-api/annotations/fixations_val2014.json'
+	    salicon =SALICON(ann_file)
+	    ImgIds = sorted(salicon.getImgIds())
+	    gt_fix = []
+	    dims = []
+	    for img in ImgIds:
+		image = salicon.loadImgs(img)[0]
+		dims.append([image['height'],image['width']])
+		annid = salicon.getAnnIds(imgIds = img)
+		anns = salicon.loadAnns(annid)
+		fixations = [ann['fixations'] for ann in anns] 
+		merged_fixations = [item for sublist in fixations for item in sublist] 
+		gt_fix.append(merged_fixations)
+ 	    
+	    k=0
 	    bg = batch_generator(batch_size,False)
 	    batch = bg.get_batch_vec()
-	    tn = 0 
-	    
+	    tkl = 0 
+	    tsim = 0
+ 	    tcc = 0
+	    tnss = 0
+	    taucb = 0
 	    while bg.current_epoch == 0 :
 		feed_dict = {input:batch['input'],target :batch['target']}
 		predictions,_ = sess.run([model.outputs,model.gen_nss],feed_dict = feed_dict)
@@ -166,15 +184,33 @@ def main():
 		    pss = p[:,:,0]
 		    tss = t[:,:,0] 
 		    kl = kld(pss,tss)
-		    tn+=kl
+		    simv = sim(pss,tss)
+                    ccv = cc(pss,tss) 
+		    
+		    tkl+=kl
+		    tcc+=ccv
+		    tsim+= simv
+
+		    gt = np.asarray(gt_fix[k])
+		    nssv = nss2(tss,gt,dims[k][0],dims[k][1]) 
+		    auc= aucb(pss,gt,dims[k][0],dims[k][1])
+		    taucb+=auc
+		    tnss+=nssv
+		    image = salicon.loadImgs(ImgIds[k])[0]
+		    I = cv2.imread('/scratch/kvg245/vidsal_gan/vidsal_gan/data/salicon-api/images/'+image['file_name'])
 		    #save_image(predictions[i,...]*255.0,output_dir,str(bg.batch_index+i)+'p')
 		    #save_image(batch['target'][i,...]*255.0,output_dir,str(bg.batch_index+i)+'t')
-		    save_image(p,output_dir,str(bg.batch_index+i)+'p')
-                    save_image(t,output_dir,str(bg.batch_index+i)+'t')
-                    save_image(n,output_dir,str(bg.batch_index+i)+'i')
-		    print(kl,tn/(bg.batch_index+i+1),bg.batch_index+i,bg.batch_len)
+		    #save_image(p,output_dir,str(bg.batch_index+i)+'p')
+                    #save_image(t,output_dir,str(bg.batch_index+i)+'t')
+                    #save_image(n,output_dir,str(bg.batch_index+i)+'i')
+		    #save_image(n,'../',str(bg.batch_index+i)+'i')
+		    #save_image(I,'../',str(bg.batch_index+i)+'o')
+		    ex = bg.batch_index+i+1-4
+		    k+=1
+		    print(auc,taucb/ex,nssv,tnss/ex,simv,tsim/ex,ccv,tcc/ex,bg.batch_index+i,bg.batch_len)
+
 		batch = bg.get_batch_vec()	
-		
+				
 	elif overfit:
 	    bg = batch_generator(batch_size,False)
 	    batch = bg.get_batch_vec()
@@ -227,10 +263,12 @@ def main():
 	    bg = batch_generator(batch_size)
 	    gv =0
             lv = 0
-	    
+	    bg.current_epoch =0
 	    while bg.current_epoch<max_epoch:
 	        c = bg.current_epoch
-	        #progress = ProgressBar(bg.batch_len/bg.batch_size,fmt = ProgressBar.FULL)
+	        cross_loss = 0
+		l1_loss  = 0
+		gan_loss = 0 
 	        while bg.current_epoch == c:
 		    start = time.time()
 		    def should(freq):
@@ -253,34 +291,37 @@ def main():
 			fetches["gen_nss"] = model.gen_nss	
 		
 		    results = sess.run(fetches,feed_dict = feed_dict)
-		    
-		    print(results["discrim_loss"],results["gen_loss_GAN"],results['gen_loss_L1'],results['gen_loss_cross'],results['gen_nss'],gv,lv,bg.current_epoch,bg.batch_index,time.time()-start,(time.time()-start)*(bg.batch_len-bg.batch_index)/batch_size*(max_epoch-bg.current_epoch-2)*batch_size)
+		    cross_loss+=results['gen_loss_cross']
+		    l1_loss+= results['gen_loss_L1']
+		    gan_loss+= results['gen_loss_GAN']
+		    print(results["discrim_loss"],gan_loss/bg.batch_index*batch_size,l1_loss/bg.batch_index*batch_size,cross_loss/bg.batch_index *batch_size,results['gen_nss'],gv,lv,bg.current_epoch,bg.batch_index,time.time()-start,(time.time()-start)*(bg.batch_len-bg.batch_index)/batch_size+(max_epoch-bg.current_epoch-2)*bg.batch_len/batch_size)
                     if should(summary_freq):
                         print("recording summary")
                         sv.summary_writer.add_summary(results["summary"], (bg.batch_index/bg.batch_size+bg.batch_len/batch_size*bg.current_epoch))
                     if should(save_freq):
                         print("saving model")
                         saver.save(sess, output_dir+"model.ckpt")
-		    if should(val_freq):
-                        bgv = batch_generator(batch_size,False)
-                        batchv = bgv.get_batch_vec()
-			bgv.current_epoch = 0
-                        gv = 0
-                        lv = 0
-			cv = 0
-                        while bgv.current_epoch == 0 :
-                            feed_dictv = {input:batchv['input'],target :batchv['target']}
-                            predictions,lgan,l1,cross = sess.run([model.outputs,model.gen_loss_GAN,model.gen_loss_L1,model.gen_loss_cross],feed_dict = feed_dictv)
-                            for i in range(batch_size):
-                		p = predictions[i,:,:,:]
-                		t = batchv['target'][i,:,:,:]
-                		n = batchv['input'][i,:,:,0:3]
-                		save_image2(p,output_dir,str(bgv.batch_index+i)+'p')
-                		save_image2(t,output_dir,str(bgv.batch_index+i)+'t')
-                		save_image(n,output_dir,str(bgv.batch_index+i)+'i')
-			    gv+=lgan
-                            lv+=l1
-			    cv+=cross
-			    batchv = bgv.get_batch_vec()
-                        print("validation loss",gv,lv)
+	        if (bg.current_epoch+1)%val_freq==0:
+		    print("validating")
+                    bgv = batch_generator(batch_size,False)
+                    batchv = bgv.get_batch_vec()
+		    bgv.current_epoch = 0
+                    gv = 0
+                    lv = 0
+		    cv = 0
+                    while bgv.current_epoch == 0 :
+                        feed_dictv = {input:batchv['input'],target :batchv['target']}
+                        predictions,lgan,l1,cross = sess.run([model.outputs,model.gen_loss_GAN,model.gen_loss_L1,model.gen_loss_cross],feed_dict = feed_dictv)
+                        for i in range(batch_size):
+                	    p = predictions[i,:,:,:]
+                	    t = batchv['target'][i,:,:,:]
+                	    n = batchv['input'][i,:,:,0:3]
+                	    save_image2(p[:,:,0],output_dir,str(bgv.batch_index+i)+'p')
+                	    save_image2(t[:,:,0],output_dir,str(bgv.batch_index+i)+'t')
+                	    save_image(n,output_dir,str(bgv.batch_index+i)+'i')
+		    	gv+=lgan
+                    	lv+=l1
+		     	cv+=cross
+		    	batchv = bgv.get_batch_vec()
+                    print("validation loss",gv,lv)
 main()
