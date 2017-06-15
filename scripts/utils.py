@@ -114,6 +114,26 @@ def lrelu(x, a):
 
 
 
+
+def conv3d_layer(inputs,in_channels,out_channels,name):
+    with tf.variable_scope(name):
+	filter_size = 3
+        filt = tf.get_variable(name+'_filter', [filter_size, filter_size, filter_size, in_channels, out_channels], DTYPE, tf.truncated_normal_initializer(stddev=0.1))
+	biases = tf.get_variable(name+'_bias',[out_channels],DTYPE, tf.constant_initializer(0.1, dtype=DTYPE))
+        conv = tf.nn.conv3d(inputs, filt, [1, 1, 1, 1, 1], padding='SAME')
+        bias = tf.nn.bias_add(conv, biases)
+        relu = lrelu(bias,0.2)
+        return relu
+
+
+def max_pool3d(input,name):
+    return tf.nn.max_pool3d(prev_layer, ksize=[1, 2, 2, 2, 1], strides=[1, 1, 1, 1, 1], padding='SAME',name = name)
+
+def max_pool3d1(input,name):
+    return tf.nn.max_pool3d(prev_layer, ksize=[1, 1, 2, 2, 1], strides=[1, 1, 1, 1, 1], padding='SAME',name = name)
+
+
+
 def get_var(data_dict,initial_value, name, idx, var_name):
     if data_dict is not None and name in data_dict:
         value = data_dict[name[-7:]][idx]
@@ -121,6 +141,9 @@ def get_var(data_dict,initial_value, name, idx, var_name):
 	value = initial_value
     var = tf.Variable(value, name=var_name)
     return var
+
+
+
 
 def get_conv_var(data_dict, filter_size, in_channels, out_channels, name):
         initial_value = tf.truncated_normal([filter_size, filter_size, in_channels, out_channels], 0.0, 0.001)
