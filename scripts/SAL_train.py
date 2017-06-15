@@ -16,7 +16,7 @@ import cv2
 Model = collections.namedtuple("Model", "outputs, predict_real, predict_fake, discrim_loss, discrim_grads_and_vars, gen_loss_GAN, gen_loss_cross, gen_loss_L1,gen_nss, gen_grads_and_vars, train")
 
 data_dir = '/scratch/kvg245/vidsal_gan/vidsal_gan/data/salicon-api/'
-output_dir = '/scratch/kvg245/vidsal_gan/vidsal_gan/output/2SAL20_1/'
+output_dir = '/scratch/kvg245/vidsal_gan/vidsal_gan/output/2SAL1/'
 train_target_file = 'train2.npy'
 train_input_file = 'train_input.npy'
 val_target_file = 'val2.npy'
@@ -25,7 +25,7 @@ val_input_file = 'val_input.npy'
 
 train = True
 overfit = False
-ckpt = False
+ckpt = True
 num_past =1
 max_epoch =300
 seed =4
@@ -261,9 +261,11 @@ def main():
 	elif train:
 	    start = time.time()
 	    bg = batch_generator(batch_size)
+	    bgv = batch_generator(batch_size,False)
 	    gv =0
             lv = 0
-	    bg.current_epoch =0
+	    bg.current_epoch = 16
+	    bg.batch_index = 0
 	    while bg.current_epoch<max_epoch:
 	        c = bg.current_epoch
 	        cross_loss = 0
@@ -303,9 +305,10 @@ def main():
                         saver.save(sess, output_dir+"model.ckpt")
 	        if (bg.current_epoch+1)%val_freq==0:
 		    print("validating")
-                    bgv = batch_generator(batch_size,False)
+                    bgv.current_epoch = 0
+		    bgv.batch_index = 0
                     batchv = bgv.get_batch_vec()
-		    bgv.current_epoch = 0
+		    
                     gv = 0
                     lv = 0
 		    cv = 0
@@ -313,7 +316,7 @@ def main():
                         feed_dictv = {input:batchv['input'],target :batchv['target']}
                         predictions,lgan,l1,cross = sess.run([model.outputs,model.gen_loss_GAN,model.gen_loss_L1,model.gen_loss_cross],feed_dict = feed_dictv)
                         for i in range(batch_size):
-                	    p = predictions[i,:,:,:]
+                       	    p = predictions[i,:,:,:]
                 	    t = batchv['target'][i,:,:,:]
                 	    n = batchv['input'][i,:,:,0:3]
                 	    save_image2(p[:,:,0],output_dir,str(bgv.batch_index+i)+'p')
@@ -323,5 +326,5 @@ def main():
                     	lv+=l1
 		     	cv+=cross
 		    	batchv = bgv.get_batch_vec()
-                    print("validation loss",gv,lv)
+             	    print("validation loss",gv,lv)
 main()
