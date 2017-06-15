@@ -16,7 +16,7 @@ import cv2
 Model = collections.namedtuple("Model", "outputs, predict_real, predict_fake, discrim_loss, discrim_grads_and_vars, gen_loss_GAN, gen_loss_cross, gen_loss_L1,gen_nss, gen_grads_and_vars, train")
 
 data_dir = '/scratch/kvg245/vidsal_gan/vidsal_gan/data/salicon-api/'
-output_dir = '/scratch/kvg245/vidsal_gan/vidsal_gan/output/2SAL1/'
+output_dir = '/scratch/kvg245/vidsal_gan/vidsal_gan/output/2SAL20_1/'
 train_target_file = 'train2.npy'
 train_input_file = 'train_input.npy'
 val_target_file = 'val2.npy'
@@ -264,7 +264,7 @@ def main():
 	    bgv = batch_generator(batch_size,False)
 	    gv =0
             lv = 0
-	    bg.current_epoch = 16
+	    bg.current_epoch = 46
 	    bg.batch_index = 0
 	    while bg.current_epoch<max_epoch:
 	        c = bg.current_epoch
