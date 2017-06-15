@@ -83,7 +83,7 @@ def vgg_decoder(layers):
         deconv3_3 = deconv_layer(deconv3_2,128,3,1,"deconv3_3")
         deconv3_4 = deconv_layer(deconv3_3,128,3,2,"deconv3_4")
         out = tf.contrib.slim.batch_norm(deconv3_4)
-        out = tf.nn.dropout(out,1.0)
+        out = tf.nn.dropout(out,0.5)
         layers.append(out)
 
     with tf.variable_scope('decoder_4'):
