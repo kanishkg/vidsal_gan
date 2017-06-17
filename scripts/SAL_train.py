@@ -23,7 +23,7 @@ val_target_file = 'val2.npy'
 val_input_file = 'val_input.npy'
 
 
-train = True
+train = False
 overfit = False
 ckpt = True
 num_past =1
@@ -192,7 +192,7 @@ def main():
 		    tsim+= simv
 
 		    gt = np.asarray(gt_fix[k])
-		    nssv = nss2(tss,gt,dims[k][0],dims[k][1]) 
+		    nssv = nss2(pss,gt,dims[k][0],dims[k][1]) 
 		    auc= aucb(pss,gt,dims[k][0],dims[k][1])
 		    taucb+=auc
 		    tnss+=nssv
@@ -309,12 +309,11 @@ def main():
 		    bgv.batch_index = 0
                     batchv = bgv.get_batch_vec()
 		    
-                    gv = 0
                     lv = 0
 		    cv = 0
                     while bgv.current_epoch == 0 :
                         feed_dictv = {input:batchv['input'],target :batchv['target']}
-                        predictions,lgan,l1,cross = sess.run([model.outputs,model.gen_loss_GAN,model.gen_loss_L1,model.gen_loss_cross],feed_dict = feed_dictv)
+                        predictions,l1,cross = sess.run([model.outputs,model.gen_loss_L1,model.gen_loss_cross],feed_dict = feed_dictv)
                         for i in range(batch_size):
                        	    p = predictions[i,:,:,:]
                 	    t = batchv['target'][i,:,:,:]
@@ -322,9 +321,8 @@ def main():
                 	    save_image2(p[:,:,0],output_dir,str(bgv.batch_index+i)+'p')
                 	    save_image2(t[:,:,0],output_dir,str(bgv.batch_index+i)+'t')
                 	    save_image(n,output_dir,str(bgv.batch_index+i)+'i')
-		    	gv+=lgan
                     	lv+=l1
 		     	cv+=cross
 		    	batchv = bgv.get_batch_vec()
-             	    print("validation loss",gv,lv)
+             	    print("validation loss",lv,cv)
 main()
