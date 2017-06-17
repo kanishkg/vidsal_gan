@@ -19,19 +19,23 @@ class batch_generator:
 
     def create_batch(self, data_list):
         """Creates and returns a batch of input and output data"""
+	
         input_batch = []
         target_batch = []
 
         for data in data_list:
-            video =  self.input_data[vid_dict[data[0]]][:]
-            target = self.target_data[target_dict[data[0]]][:]
-            frames = np.asarray(video[data[1]])
-            maps = np.asarray(target[data[1]])
+            video =  self.input_data[data[0],data[1]-self.num_frames+1:data[1]+1,...]
+            target = self.target_data[data[0],data[1],...]
             input_batch.append(frames)
             target_batch.append(maps)
         target_batch = np.asarray(target_batch)/255.0
         input_batch = np.asarray(input_batch)
-        return {'input':np.reshape(input_batch,(input_batch.shape[0],input_batch.shape[1],input_batch.shape[2],input_batch.shape[3])),'target':np.reshape(target_batch,(target_batch.shape[0],target_batch.shape[1],target_batch.shape[2],1))}
+        
+        dummy = np.zeros((input_batch.shape[0],input_batch.shape[2],input_batch.shape[3],input_batch.shape[1]*input_batch.shape[4]))
+        for i in range(self.num_frames):
+            dummy[:,:,:,3*i:3*i+3] = input_batch[:,i,:,:,:]
+ 
+	return {'input':np.reshape(input_batch,(input_batch.shape[0],input_batch.shape[1],input_batch.shape[2],input_batch.shape[3])),'target':np.reshape(target_batch,(target_batch.shape[0],target_batch.shape[1],target_batch.shape[2],1))}
 
     def get_batch_vec(self):
         """Provides batch of data to process and keeps 
