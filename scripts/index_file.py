@@ -1,12 +1,12 @@
 import os
-import numpy
+import numpy as np
 import h5py
 import pickle
 from utils import ProgressBar
 
-lag = 3
-num_frames = 4
-
+lag = 4
+num_frames = 16
+"""
 file_dir = '../../../../scratch/kvg245/vidsal_gan/vidsal_gan/data/IRCCYN3D/'
 data_list = []
 print "reading file"
@@ -41,3 +41,17 @@ progress.done()
 print "saving pickle"
 with open(file_dir+'indices','w') as ifile:
     pickle.dump(index_list,ifile)
+"""
+
+input_dir = '/scratch/kvg245/vidsal_gan/vidsal_gan/data/Hollywood_2/AVIClips/input2.npy'
+input  = np.load(input_dir)
+index_list = []
+for i in range(input.shape[0]):
+    for j in range(input.shape[1]):
+	if j>num_frames+lag:
+	    index_list.append([i,j])
+
+print "saving pickle"
+with open('/scratch/kvg245/vidsal_gan/vidsal_gan/data/Hollywood_2/index','w') as f:
+    pickle.dump(index_list,f)
+

@@ -1,19 +1,25 @@
+import pickle
+import numpy as np
+
+
 class batch_generator:
 
-    def __init__( self,batch_size = 8,istrain = True, target_file = '/scratch/kvg245/vidsal_gan/vidsal_gan/data/Hollywood_2/AVIClips/input.npy',input_file = '/scratch/kvg245/vidsal_gan/vidsal_gan/data/Hollywood_2/AVIClips/target.npy',num_frames = 16):
+    def __init__( self,batch_size = 8,istrain = True, target_file = '/scratch/kvg245/vidsal_gan/vidsal_gan/data/Hollywood_2/AVIClips/input.npy',input_file = '/scratch/kvg245/vidsal_gan/vidsal_gan/data/Hollywood_2/AVIClips/target.npy',num_frames = 16,index_file = '/scratch/kvg245/vidsal_gan/vidsal_gan/data/Hollywood_2/index'):
         self.batch_size = batch_size
         self.istrain = istrain
-        self.index_data,self.target_data,self.input_data = self.open_files(target_file,input_file)
+        self.index_data,self.target_data,self.input_data = self.open_files(target_file,input_file,index_file)
         self.batch_len = len(self.index_data)
         self.current_epoch = None
         self.batch_index = None
      	self.num_frames = num_frames
 
-    def open_files(self,target_file,input_file):
+    def open_files(self,target_file,input_file,index_file):
         with open(input_file,'r') as f:
 	    input = np.asarray(np.load(f))
  	with open(target_file,'r') as f:
 	    target = np.asarray(np.load(f))
+	with open(index_file,'rb') as f:
+	    index_data = pickle.load(f)
 
         return index_data,target, input
 

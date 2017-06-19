@@ -49,9 +49,9 @@ def main():
             restore_saver.restore(sess,checkpoint)
 
 	if mode =='val':
-	    
+            pass	    
 	elif mode == 'overfit':
-
+            pass
 	else:
 	    start = time.time()
             bg = batch_generator(batch_size)
