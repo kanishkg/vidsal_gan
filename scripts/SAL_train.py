@@ -16,13 +16,13 @@ import cv2
 Model = collections.namedtuple("Model", "outputs, predict_real, predict_fake, discrim_loss, discrim_grads_and_vars, gen_loss_GAN, gen_loss_cross, gen_loss_L1,gen_nss, gen_grads_and_vars, train")
 
 data_dir = '/scratch/kvg245/vidsal_gan/vidsal_gan/data/salicon-api/'
-output_dir = '/scratch/kvg245/vidsal_gan/vidsal_gan/output/2SAL20_1/'
+output_dir = '/scratch/kvg245/vidsal_gan/vidsal_gan/output/SAL1_0noskip/'
 train_target_file = 'train2.npy'
 train_input_file = 'train_input.npy'
 val_target_file = 'val2.npy'
 val_input_file = 'val_input.npy'
 
-
+save_npy = True
 train = False
 overfit = False
 ckpt = True
@@ -148,6 +148,16 @@ def main():
 	    print(output_dir)
             checkpoint = tf.train.latest_checkpoint(output_dir)
 	    restore_saver.restore(sess,checkpoint)
+ 	    if save_npy:
+		data_dict = {}
+                #gen_vars = sess.run(model.gen_grads_and_vars)
+        	for grad, var in model.gen_grads_and_vars:
+		    print var
+            	    var_out = sess.run(var.name)
+            	    if var.name not in data_dict:
+                        data_dict[var.name] =var_out
+            	np.save(output_dir+'model.npy', data_dict)
+           	print(("file saved"))
             
 	if not train:
 	    ann_file = '/scratch/kvg245/vidsal_gan/vidsal_gan/data/salicon-api/annotations/fixations_val2014.json'
