@@ -1,7 +1,7 @@
 import collections
 
 from utils import *
-from vgg_model import *
+from vim_vgg_model import *
 import tensorflow as tf
 
 
