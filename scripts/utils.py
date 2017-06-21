@@ -118,19 +118,20 @@ def lrelu(x, a):
 def conv3d_layer(inputs,in_channels,out_channels,name):
     with tf.variable_scope(name):
 	filter_size = 3
-        filt = tf.get_variable(name+'_filter', [filter_size, filter_size, filter_size, in_channels, out_channels], DTYPE, tf.truncated_normal_initializer(stddev=0.1))
-	biases = tf.get_variable(name+'_bias',[out_channels],DTYPE, tf.constant_initializer(0.1, dtype=DTYPE))
+        filt = tf.get_variable(name+'_filter', [filter_size, filter_size, filter_size, in_channels, out_channels], dtype = tf.float32, initializer = tf.truncated_normal_initializer(stddev=0.1))
+	biases = tf.get_variable(name+'_bias',[out_channels],tf.float32, tf.constant_initializer(0.1, dtype=tf.float32))
         conv = tf.nn.conv3d(inputs, filt, [1, 1, 1, 1, 1], padding='SAME')
         bias = tf.nn.bias_add(conv, biases)
         relu = lrelu(bias,0.2)
         return relu
 
 
+
 def max_pool3d(input,name):
-    return tf.nn.max_pool3d(prev_layer, ksize=[1, 2, 2, 2, 1], strides=[1, 1, 1, 1, 1], padding='SAME',name = name)
+    return tf.nn.max_pool3d(input, ksize=[1, 2, 2, 2, 1], strides=[1, 2, 2, 2, 1], padding='SAME',name = name)
 
 def max_pool3d1(input,name):
-    return tf.nn.max_pool3d(prev_layer, ksize=[1, 1, 2, 2, 1], strides=[1, 1, 1, 1, 1], padding='SAME',name = name)
+    return tf.nn.max_pool3d(input, ksize=[1, 1, 2, 2, 1], strides=[1, 1, 2, 2, 1], padding='SAME',name = name)
 
 
 
@@ -165,11 +166,6 @@ def conv_layer(data_dict,bottom, in_channels, out_channels, name):
 	return relu
 
 
-
-
-
-
-
 def get_var2(data_dict,initial_value, name,  var_name):
     for key in data_dict.keys():
         if data_dict is not None and var_name in key:
@@ -178,8 +174,6 @@ def get_var2(data_dict,initial_value, name,  var_name):
         value = initial_value
     var = tf.Variable(value, name=var_name)
     return var
-
-
 
 
 def get_conv_var2(data_dict, filter_size, in_channels, out_channels, name):
@@ -232,12 +226,11 @@ def conv11(batch_input,out_channels=1, stride=1):
         conv = tf.nn.conv2d(batch_input, filter, [1, stride, stride, 1], padding="SAME")
         return conv
 
-def conv112(batch_input,data_dict = {} ,out_channels=1, stride=1):
+def conv112(batch_input,data_dict = {} ,out_channels=1,in_channels=64, stride=1):
 
     with tf.variable_scope("conv11"):
-        in_channels = batch_input.get_shape()[3]
 	
-        initial_filter = tf.random_normal( [1, 1, in_channels, out_channels], 0, 0.02)
+        initial_filter = tf.truncated_normal( [1, 1, in_channels, out_channels], 0, 0.02)
 	filter = get_var2(data_dict,initial_filter,'conv11','conv11/filter')
         conv = tf.nn.conv2d(batch_input, filter, [1, stride, stride, 1], padding="SAME")
         return conv

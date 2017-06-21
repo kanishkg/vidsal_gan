@@ -17,12 +17,12 @@ Model = collections.namedtuple("Model", "outputs, predict_real, predict_fake, di
 
 data_dir = '/scratch/kvg245/vidsal_gan/vidsal_gan/data/salicon-api/'
 output_dir = '/scratch/kvg245/vidsal_gan/vidsal_gan/output/SAL1_0noskip/'
-train_target_file = 'train2.npy'
+train_target_file = 'train.npy'
 train_input_file = 'train_input.npy'
-val_target_file = 'val2.npy'
+val_target_file = 'val.npy'
 val_input_file = 'val_input.npy'
 
-save_npy = True
+save_npy = False
 train = False
 overfit = False
 ckpt = True

@@ -1,5 +1,7 @@
 import pickle
 import numpy as np
+import utils
+import random
 
 
 class batch_generator:
@@ -12,6 +14,8 @@ class batch_generator:
         self.current_epoch = None
         self.batch_index = None
      	self.num_frames = num_frames
+	random.seed(4)
+        self.val_list = list(random.sample(0,7555),int(7555*0.2))
 
     def open_files(self,target_file,input_file,index_file):
         with open(input_file,'r') as f:
@@ -20,7 +24,10 @@ class batch_generator:
 	    target = np.asarray(np.load(f))
 	with open(index_file,'rb') as f:
 	    index_data = pickle.load(f)
-
+	if self.istrain:
+	    index_data = shuffled([a for a in index_data if a[0] not in self.val_list])
+	else:
+	    index_data = shuffled([a for a in index_data if a[0] in self.val_list])
         return index_data,target, input
 
     def create_batch(self, data_list):
@@ -41,7 +48,7 @@ class batch_generator:
         for i in range(self.num_frames):
             dummy[:,:,:,3*i:3*i+3] = input_batch[:,i,:,:,:]
  
-	return {'input':np.reshape(input_batch,(input_batch.shape[0],input_batch.shape[1],input_batch.shape[2],input_batch.shape[3])),'target':np.reshape(target_batch,(target_batch.shape[0],target_batch.shape[1],target_batch.shape[2],1))}
+	return {'input':input_batch,'target':np.reshape(target_batch,(target_batch.shape[0],target_batch.shape[1],target_batch.shape[2],1))}
 
     def get_batch_vec(self):
         """Provides batch of data to process and keeps 

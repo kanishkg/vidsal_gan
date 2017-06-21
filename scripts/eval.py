@@ -1,6 +1,7 @@
 import numpy as np
 import scipy.ndimage
 import cv2
+import scipy
 
 def sim(pred,target):
     pred /=np.sum(pred)
@@ -32,7 +33,7 @@ def cc(pred,target):
 
 def nss2(pred,gt,h,w):
     mh,mw = np.shape(pred)
-    salMap = pred
+    salMap = np.clip(pred,0.7,2)
     salMap = scipy.ndimage.zoom(pred, (float(h)/mh, float(w)/mw), order=3)
     salMap = salMap - np.mean(salMap)
     salMap = salMap / np.std(salMap)
