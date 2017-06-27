@@ -166,22 +166,23 @@ def conv_layer(data_dict,bottom, in_channels, out_channels, name):
 	return relu
 
 
-def get_var2(data_dict,initial_value, name,  var_name):
+def get_var2(data_dict,initial_value, name,  var_name, t =True):
     for key in data_dict.keys():
         if data_dict is not None and var_name in key:
             value = data_dict[key]
+	    print("loading pretrained")
     else:
         value = initial_value
-    var = tf.Variable(value, name=var_name)
+    var = tf.Variable(value, name=var_name,trainable =t)
     return var
 
 
 def get_conv_var2(data_dict, filter_size, in_channels, out_channels, name):
         initial_value = tf.truncated_normal([filter_size, filter_size, in_channels, out_channels], 0.0, 0.001)
-        filters = get_var(data_dict,initial_value, name, 0, name + "_filters")
+        filters = get_var(data_dict,initial_value, name, 0, name + "_filters",False)
 
         initial_value = tf.truncated_normal([out_channels], .0, .001)
-        biases = get_var(data_dict,initial_value, name, 1, name + "_biases")
+        biases = get_var(data_dict,initial_value, name, 1, name + "_biases",False)
 
         return filters, biases
 
@@ -197,10 +198,6 @@ def conv_layer2(data_dict,bottom, in_channels, out_channels, name):
 
 def max_pool( bottom, name):
     return tf.nn.max_pool(bottom, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME', name=name)
-
-
-
-
 
 def conv(batch_input, out_channels, stride):
     """Convoluton with filter size 4 x 4 x in_channels x out_channels 
@@ -234,6 +231,22 @@ def conv112(batch_input,data_dict = {} ,out_channels=1,in_channels=64, stride=1)
 	filter = get_var2(data_dict,initial_filter,'conv11','conv11/filter')
         conv = tf.nn.conv2d(batch_input, filter, [1, stride, stride, 1], padding="SAME")
         return conv
+
+
+def conv113(batch_input,out_channels=1,in_channels=512*3, stride=1):
+
+    with tf.variable_scope("conv11"):
+	initial_filt = tf.concat([tf.eye(out_channels),tf.zeros((in_channels-out_channels,out_channels))],axis = 0 )+tf.truncated_normal([in_channels,out_channels],0,0.001)
+	initial_filt = tf.reshape(initial_filt,[1,1,in_channels,out_channels])
+        filter = tf.Variable(initial_value =initial_filt ,name = "filter", dtype=tf.float32)
+        # [batch, in_height, in_width, in_channels], [filter_width, filter_height, in_channels, out_channels]
+        #     => [batch, out_height, out_width, out_channels]
+        #padded_input = tf.pad(batch_input, [[0, 0], [1, 1], [1, 1], [0, 0]], mode="CONSTANT")
+        conv = tf.nn.conv2d(batch_input, filter, [1, stride, stride, 1], padding="SAME")
+        return conv
+
+
+
 
 
 def lrelu(x, a):

@@ -12,6 +12,7 @@ vgg19_npy_path = '/scratch/kvg245/vidsal_gan/vidsal_gan/output/SAL1_0noskip/mode
 def vgg_encoder(inputs):
     if vgg19_npy_path is not None:
 	data_dict = np.load(vgg19_npy_path, encoding='latin1').item()
+    
     with tf.variable_scope('encoder_1'):
     	conv1_1 = conv_layer2(data_dict,inputs, 3, 64, "conv1_1")
     	conv1_2 = conv_layer2(data_dict,conv1_1, 64, 64, "conv1_2")

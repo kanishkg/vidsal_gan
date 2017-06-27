@@ -66,6 +66,17 @@ def combine_encodings(vgg, temporal, past):
     return conv6_11
 #    return vgg
 
+def gmm_params(encodings, N = 20):
+    with tf.variable_scope('gmm_pred'):
+	net = max_pool(encodings,'poolg')
+	net = tf.contribs.slim.ops.flatten(net,scope= 'flatteng')
+	net = tf.contribs.slim.ops.fc(net,4096,scope = 'fc1g')
+	net = tf.nn.dropout(net,0.5)
+	net = tf.contribs.slim.ops.fc(net,4096.scope = 'fc2g')
+	weights = tf.contribs.slim.ops.fc(net,N,activation = softmax, scope = 'fc3wg')	
+	params = tf.contribs.slim.ops.fc(net, N*3,activation = None, scope = 'fc3pg')
+    return weights,params
+
 def create_vid_model(inputs,targets,past):
     with tf.variable_scope('generator'):
         current_frame = inputs[:,0,:,:,:]
@@ -73,12 +84,10 @@ def create_vid_model(inputs,targets,past):
 	temporal = temporal_encoder (inputs)
 	
     	encoded = combine_encodings(vgg[-1],temporal[-1],past)
-    	outputs = vgg_decoder(encoded)[-1]
+    	weights, params = gmm_params(encoded)
    
     with tf.name_scope("generator_loss"):
-        gen_loss_L1 = tf.reduce_mean(tf.abs(targets - tf.sigmoid(outputs)))
-        gen_loss_cross = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels = targets,logits = outputs))
-        gen_loss = gen_loss_L1 * l1_weight + gen_loss_cross * cross_weight
+         
 
     with tf.name_scope("generator_train"):
         gen_tvars = [var for var in tf.trainable_variables() if var.name.startswith("generator")]

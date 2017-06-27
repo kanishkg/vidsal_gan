@@ -1,53 +1,64 @@
 import pickle
 import numpy as np
-import utils
+from utils import *
 import random
-
+import h5py
+import time
 
 class batch_generator:
 
-    def __init__( self,batch_size = 8,istrain = True, target_file = '/scratch/kvg245/vidsal_gan/vidsal_gan/data/Hollywood_2/AVIClips/input.npy',input_file = '/scratch/kvg245/vidsal_gan/vidsal_gan/data/Hollywood_2/AVIClips/target.npy',num_frames = 16,index_file = '/scratch/kvg245/vidsal_gan/vidsal_gan/data/Hollywood_2/index'):
+    def __init__( self,batch_size = 8,istrain = True, input_file = '/scratch/kvg245/vidsal_gan/vidsal_gan/data/Hollywood2/input.h5',target_file = '/scratch/kvg245/vidsal_gan/vidsal_gan/data/Hollywood2/target.h5',num_frames = 16,index_file = '/scratch/kvg245/vidsal_gan/vidsal_gan/data/Hollywood2/index'):
         self.batch_size = batch_size
         self.istrain = istrain
-        self.index_data,self.target_data,self.input_data = self.open_files(target_file,input_file,index_file)
+        random.seed(4)
+        self.val_list = list(random.sample(range(0,7555),int(7555*0.2)))
+     	self.index_data,self.target_data,self.input_data = self.open_files(target_file,input_file,index_file)
         self.batch_len = len(self.index_data)
         self.current_epoch = None
         self.batch_index = None
      	self.num_frames = num_frames
-	random.seed(4)
-        self.val_list = list(random.sample(0,7555),int(7555*0.2))
+	
+        
 
     def open_files(self,target_file,input_file,index_file):
-        with open(input_file,'r') as f:
-	    input = np.asarray(np.load(f))
- 	with open(target_file,'r') as f:
-	    target = np.asarray(np.load(f))
+	
+	input = h5py.File(input_file,'r') 
+	target =  h5py.File(target_file,'r')
+	
 	with open(index_file,'rb') as f:
 	    index_data = pickle.load(f)
 	if self.istrain:
 	    index_data = shuffled([a for a in index_data if a[0] not in self.val_list])
 	else:
 	    index_data = shuffled([a for a in index_data if a[0] in self.val_list])
-        return index_data,target, input
+        
+	print len(index_data)
+        
+	return index_data,target, input
 
     def create_batch(self, data_list):
         """Creates and returns a batch of input and output data"""
 	
         input_batch = []
         target_batch = []
-
         for data in data_list:
-            video =  self.input_data[data[0],data[1]-self.num_frames+1:data[1]+1,...]
-            target = self.target_data[data[0],data[1],...]
-            input_batch.append(frames)
-            target_batch.append(maps)
-        target_batch = np.asarray(target_batch)/255.0
+	    #video = np.load('/scratch/kvg245/vidsal_gan/vidsal_gan/data/Hollywood2/AVIClips/'+str(data[0])+'i.npy')[data[1]-self.num_frames+1:data[1]+1,...]
+	    
+	    #target = np.load('/scratch/kvg245/vidsal_gan/vidsal_gan/data/Hollywood2/AVIClips/'+str(data[0])+'t.npy')[data[1],...]
+            video =  self.input_data[str(data[0])][data[1]-self.num_frames+1:data[1]+1,...]
+            target = self.target_data[str(data[0])][data[1],...]
+            VGG_MEAN = [103.939, 116.779, 123.68]
+            video[:,:,:,0]-=VGG_MEAN[0]
+            video[:,:,:,1]-=VGG_MEAN[1]
+            video[:,:,:,2]-=VGG_MEAN[2]
+            input_batch.append(video)
+            target_batch.append(target)
+        target_batch = np.asarray(target_batch)
         input_batch = np.asarray(input_batch)
-        
-        dummy = np.zeros((input_batch.shape[0],input_batch.shape[2],input_batch.shape[3],input_batch.shape[1]*input_batch.shape[4]))
-        for i in range(self.num_frames):
-            dummy[:,:,:,3*i:3*i+3] = input_batch[:,i,:,:,:]
- 
+        #dummy = np.zeros((input_batch.shape[0],input_batch.shape[2],input_batch.shape[3],input_batch.shape[1]*input_batch.shape[4]))
+        #for i in range(self.num_frames-1):
+        #    dummy[:,:,:,3*i:3*i+3] = input_batch[:,i,:,:,:]
+ 	
 	return {'input':input_batch,'target':np.reshape(target_batch,(target_batch.shape[0],target_batch.shape[1],target_batch.shape[2],1))}
 
     def get_batch_vec(self):
