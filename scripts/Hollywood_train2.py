@@ -4,19 +4,19 @@ from eval import *
 import numpy as np
 import random
 import tensorflow as tf
-from multigpu_video_model import *
+from multigpu_video_model2 import *
 from hollywood_bg import *
 from utils import *
 
 
 Model = collections.namedtuple("Model", "encoding, outputs, gen_loss_cross, gen_loss_L1, gen_grads_and_vars, train")
 
-mode = 'val'
+mode = 'val2'
 ckpt = True
 num_gpus =1 
 seed = 4
 num_frames = 16
-batch_size = 4*num_gpus
+batch_size = 1*num_gpus
 max_epoch = 300
 
 progress_freq = 1
@@ -24,7 +24,7 @@ save_freq = 1000
 val_freq = 2
 summary_freq = 100
 
-output_dir = '/scratch/kvg245/vidsal_gan/vidsal_gan/output/h1mrun2/'
+output_dir = '/scratch/kvg245/vidsal_gan/vidsal_gan/output/master1/'
 
 
 
@@ -70,8 +70,59 @@ def main():
             checkpoint = tf.train.latest_checkpoint(output_dir)
             restore_saver.restore(sess,checkpoint)
 
-	if mode =='val':
-	    bgv = batch_generator(batch_size,False)
+	if mode == 'val2':
+            bg = batch_generator(batch_size,False)
+            tl = 0
+            tc = 0
+            bg.current_epoch = 0
+            bg.batch_index = 0
+            past_array = np.zeros((batch_size,14,14,512))
+            v =7
+            cross_loss = 0
+            l1_loss  = 0
+            tsim = 0
+            tcc = 0
+
+            while bg.current_epoch == 0:
+                start = time.time()
+                def should(freq):
+                    return freq > 0 and ((bg.batch_index/batch_size) % freq == 0 )
+                batch = bg.get_batch_vec()
+                if bg.video !=v:
+                    past_array =  np.zeros((batch_size,14,14,512))
+                feed_dict = {input:batch['input'],target :batch['target'],past:past_array}
+                fetches = {
+                    "outputs": model.outputs,
+                    "encoding": model.encoding
+                        }
+
+                if should(progress_freq):
+                    fetches["gen_loss_L1"] = model.gen_loss_L1
+                    fetches["gen_loss_cross"] = model.gen_loss_cross
+                results = sess.run(fetches,feed_dict = feed_dict)
+                past_array = results["encoding"]
+                cross_loss+=results['gen_loss_cross']
+                l1_loss+= results['gen_loss_L1']
+                p = results['outputs'][0,:,:,:]
+                t = batch['target'][0,:,:,:]
+                n = batch['input'][0,0,:,:,:]
+                VGG_MEAN = [103.939, 116.779, 123.68]
+                n[:,:,0]+=VGG_MEAN[0]
+                n[:,:,1]+=VGG_MEAN[1]
+                n[:,:,2]+=VGG_MEAN[2]
+                pss = p[:,:,0]
+                tss = t[:,:,0]
+
+                simv = sim(pss,tss)
+                ccv = cc(pss,tss)
+                tcc+=ccv
+                tsim+= simv
+
+                print(v,l1_loss/bg.batch_index*batch_size,cross_loss/bg.batch_index *batch_size,bg.current_epoch,bg.batch_index,tcc/bg.batch_index,tsim/bg.batch_index)
+		v = bg.video
+                          
+	elif mode =='val':
+	    bgv = batch_generator(batch_size)
             bgv.current_epoch =0
             bgv.batch_index=0
             tl = 0
@@ -83,10 +134,15 @@ def main():
             taucb = 0
 
             j = batch_size
+	    v = 7 
+	    past_array = np.zeros((batch_size,14,14,512))
             while bgv.current_epoch==0:
             	batchv = bgv.get_batch_vec()
-                feed_dict = {input:batchv['input'],target :batchv['target']}
-                c,l1,predictions = sess.run([model.gen_loss_cross,model.gen_loss_L1,model.outputs],feed_dict)
+	        if bgv.video!=v:
+		    print 'here'
+		    past_array = np.zeros((batch_size,14,14,512))
+                feed_dict = {input:batchv['input'],target :batchv['target'],past : past_array}
+                c,l1,predictions,past_array = sess.run([model.gen_loss_cross,model.gen_loss_L1,model.outputs,model.encoding],feed_dict)
                 tc+=c
                 tl+=l1
                 j+=batch_size
@@ -119,7 +175,8 @@ def main():
                     #save_image2(p[:,:,0],output_dir,str(bgv.batch_index+i)+'p')
                     #save_image2(t[:,:,0],output_dir,str(bgv.batch_index+i)+'t')
                     #save_image(n,output_dir,str(bgv.batch_index+i)+'i')
-                print(j,tl/j,tc/j,tkl/j,tcc/j,tsim/j)
+                print(v,bgv.batch_index,tl/bgv.batch_index,tc/bgv.batch_index,tkl/j,tcc/j,tsim/j)
+		v = bgv.video
 	    
         
 	elif mode == "benchmark":
@@ -148,6 +205,7 @@ def main():
 
                 fetches = {
                    "train": model.train,
+		   "encoding":model.encoding,
                         }
 
                 if should(progress_freq):
@@ -175,8 +233,10 @@ def main():
             tc = 0
             bg.current_epoch = 0
             bg.batch_index = 0
+	    past_array = np.zeros((batch_size,14,14,512))
             while bg.current_epoch<max_epoch:
                 c = bg.current_epoch
+		v =7
                 cross_loss = 0
                 l1_loss  = 0
                 gan_loss = 0
@@ -185,10 +245,13 @@ def main():
                     def should(freq):
                         return freq > 0 and ((bg.batch_index/batch_size) % freq == 0 )
                     batch = bg.get_batch_vec()
+		    if bg.video !=v:
+		        past_array =  np.zeros((batch_size,14,14,512))
 		    get_time = time.time()-start
-                    feed_dict = {input:batch['input'],target :batch['target']}
+                    feed_dict = {input:batch['input'],target :batch['target'],past:past_array}
                     fetches = {
-                        "train": model.train,
+                        "train": model.outputs,
+			"encoding": model.encoding
                             }
 
                     if should(summary_freq):
@@ -199,17 +262,19 @@ def main():
                         fetches["gen_loss_cross"] = model.gen_loss_cross
 		    here =time.time() 
 		    results = sess.run(fetches,feed_dict = feed_dict)
+		    past_array = results["encoding"]
 		    compute_time = time.time()- here
 		    print(get_time,compute_time)
                     cross_loss+=results['gen_loss_cross']
                     l1_loss+= results['gen_loss_L1']
-                    print(l1_loss/bg.batch_index*batch_size,cross_loss/bg.batch_index *batch_size,bg.current_epoch,bg.batch_index,time.time()-start,(time.time()-start)*(bg.batch_len-bg.batch_index)/batch_size+(max_epoch-bg.current_epoch-2)*bg.batch_len/batch_size)
+                    print(v,l1_loss/bg.batch_index*batch_size,cross_loss/bg.batch_index *batch_size,bg.current_epoch,bg.batch_index,time.time()-start,(time.time()-start)*(bg.batch_len-bg.batch_index)/batch_size+(max_epoch-bg.current_epoch-2)*bg.batch_len/batch_size)
                     if should(summary_freq):
                         print("recording summary")
                         sv.summary_writer.add_summary(results["summary"], (bg.batch_index/bg.batch_size+bg.batch_len/batch_size*bg.current_epoch))
                     if should(save_freq):
                         print("saving model")
                         saver.save(sess, output_dir+"model.ckpt")
+		    v=bg.video
 		if (bg.current_epoch+1)%val_freq == 0:
 	            bgv.current_epoch =0 
 		    bgv.batch_index=0

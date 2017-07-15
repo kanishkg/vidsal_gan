@@ -1,3 +1,4 @@
+
 import collections
 
 from utils import *
@@ -122,15 +123,22 @@ def combine_encodings(vgg, temporal, past):
     	
     with tf.variable_scope('weight_map'):
 	conv6_11 = conv113(combined,512)
+	maps = tf.concat([conv6_11,past],axis=3)
+	conv6_2 = conv_layer(None,maps,512*2,512,"conv6_2")
+	
 #	maps = tf.unstack(combined,axis = 1)
 #	maps = tf.concat(maps,axis = 3)    
 #	conv6_1 = conv_layer({},maps,512*3,512,"conv6_1")
-#        fc_input = tf.contrib.layers.flatten(conv6_1) 
-#        fc6_1 = tf.contrib.slim.fully_connected(fc_input,512*3,scope = "fc6_1")
+        fc_input = tf.contrib.layers.flatten(conv6_2) 
+        fc6_1 = tf.sigmoid(tf.contrib.slim.fully_connected(fc_input,512,activation_fn=None,scope = "fc6_1"))
 #	out6 = 512 * tf.nn.softmax(fc6_1)
+	fmaps = []
+	def feat_multiply(a,b):
+            return tf.stack([a[j,...]*b[j]for j in range(1)])
 
-#    def feat_multiply(a,b):
-#	return tf.stack([a[i,...]*b[i]for i in range(4)])
+	for i in range(512):
+	    fmaps.append(feat_multiply(maps[:,:,:,i],fc6_1[:,i])+feat_multiply(maps[:,:,:,i+512],1.0-fc6_1[:,i]))
+	fmaps = tf.stack(fmaps,axis = 3)
 #    maps = []
 #    for i in range(512):
 	
@@ -138,7 +146,7 @@ def combine_encodings(vgg, temporal, past):
 
 #    vgg =tf.stack(maps,axis =3)
     
-    return conv6_11
+    return fmaps
 #    return vgg
 
 def inference_loss(inputs,targets,past):
@@ -172,7 +180,7 @@ def inference_loss(inputs,targets,past):
 
 
 def create_vid_model(inputs,targets,past):
-    bs = 4
+    bs = 1 
     num_gpus = 1 
     towers = []
     tower_grads = []

@@ -46,6 +46,7 @@ def kld(pred,target):
 
 def shuffled(x):
     y = x[:]
+    random.seed(4)
     random.shuffle(y)
     return y
 
@@ -60,6 +61,13 @@ def save_image2 (image,output_dir,filename):
     
     plt.imsave(output_dir+filename+'.png', image)
     return
+
+
+
+
+
+
+
 
 
 class ProgressBar(object):
@@ -155,6 +163,10 @@ def get_conv_var(data_dict, filter_size, in_channels, out_channels, name):
 
         return filters, biases
 
+
+
+
+
 def conv_layer(data_dict,bottom, in_channels, out_channels, name):
     with tf.variable_scope(name):
 	filt, conv_biases = get_conv_var(data_dict,3, in_channels, out_channels, name)
@@ -170,25 +182,50 @@ def get_var2(data_dict,initial_value, name,  var_name, t =True):
     for key in data_dict.keys():
         if data_dict is not None and var_name in key:
             value = data_dict[key]
-	    print("loading pretrained")
-    else:
-        value = initial_value
+	    print(var_name,value.shape)
+	    return tf.Variable(value, name=var_name,trainable =t)
+    value = initial_value
     var = tf.Variable(value, name=var_name,trainable =t)
     return var
 
 
 def get_conv_var2(data_dict, filter_size, in_channels, out_channels, name):
         initial_value = tf.truncated_normal([filter_size, filter_size, in_channels, out_channels], 0.0, 0.001)
-        filters = get_var(data_dict,initial_value, name, 0, name + "_filters",False)
+        filters = get_var2(data_dict,initial_value, name,  name + "_filters",False)
 
         initial_value = tf.truncated_normal([out_channels], .0, .001)
-        biases = get_var(data_dict,initial_value, name, 1, name + "_biases",False)
+        biases = get_var2(data_dict,initial_value, name,  name + "_biases",False)
 
         return filters, biases
 
+
+def get_conv3d_var(data_dict, filter_size, in_channels, out_channels, name):
+        initial_value = tf.truncated_normal([out_channels,in_channels,filter_size, filter_size, filter_size], 0.0, 0.001)
+        filters = get_var2(data_dict,initial_value, name,  name + "_filters",False)
+	print(data_dict.keys())
+        initial_value = tf.truncated_normal([out_channels], .0, .001)
+        biases = get_var2(data_dict,initial_value, name,  name + "_biases",False)
+
+        return filters, biases
+
+
+def conv3d_layer2(data_dict,inputs,in_channels,out_channels,name):
+    with tf.variable_scope(name):
+        filter_size = 3
+        print(data_dict.keys())
+
+        filt,biases = get_conv3d_var(data_dict,filter_size,in_channels,out_channels,name )
+        conv = tf.nn.conv3d(inputs, tf.transpose(filt,[2,3,4,1,0]), [1, 1, 1, 1, 1], padding='SAME')
+	bias = tf.nn.bias_add(conv,biases)
+        relu = lrelu(bias,0.2)
+        return relu
+
+
+
+
 def conv_layer2(data_dict,bottom, in_channels, out_channels, name):
     with tf.variable_scope(name):
-        filt, conv_biases = get_conv_var(data_dict,3, in_channels, out_channels, name)
+        filt, conv_biases = get_conv_var2(data_dict,3, in_channels, out_channels, name)
 
         conv = tf.nn.conv2d(bottom, filt, [1, 1, 1, 1], padding='SAME')
         bias = tf.nn.bias_add(conv, conv_biases)
@@ -210,6 +247,7 @@ def conv(batch_input, out_channels, stride):
         padded_input = tf.pad(batch_input, [[0, 0], [1, 1], [1, 1], [0, 0]], mode="CONSTANT")
         conv = tf.nn.conv2d(padded_input, filter, [1, stride, stride, 1], padding="VALID")
         return conv
+
 
 def conv11(batch_input,out_channels=1, stride=1):
 

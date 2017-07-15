@@ -4,28 +4,27 @@ from eval import *
 import numpy as np
 import random
 import tensorflow as tf
-from multigpu_video_model import *
-from hollywood_bg import *
+from GMM_model import *
+from GMM_hollywood_bg import *
 from utils import *
-
+from tensorflow.python.client import timeline
 
 Model = collections.namedtuple("Model", "encoding, outputs, gen_loss_cross, gen_loss_L1, gen_grads_and_vars, train")
 
-mode = 'val'
-ckpt = True
-num_gpus =1 
+mode = 'train'
+ckpt = False
+
 seed = 4
 num_frames = 16
-batch_size = 4*num_gpus
+batch_size = 4 
 max_epoch = 300
 
 progress_freq = 1
-save_freq = 1000
-val_freq = 2
-summary_freq = 100
+save_freq = 3000
+val_freq = 3
+summary_freq = 400
 
-output_dir = '/scratch/kvg245/vidsal_gan/vidsal_gan/output/h1mrun2/'
-
+output_dir = '/scratch/kvg245/vidsal_gan/vidsal_gan/output/gmmtest/'
 
 
 def main():
@@ -37,20 +36,19 @@ def main():
 
 
     input = tf.placeholder(dtype = tf.float32,shape = (batch_size,num_frames,224,224,3))
-    target = tf.placeholder(dtype = tf.float32, shape = (batch_size,224,224,1))
+    target = tf.placeholder(dtype = tf.float32, shape = (batch_size,15,2))
     past  = tf.placeholder(dtype = tf.float32,shape = (batch_size,14,14,512))
     print("Initializing the model")
     model = create_vid_model(input,target,past)
 	
-    print("Getting the Summaries in Order") 
-    tf.summary.scalar("generator_loss_L1", model.gen_loss_L1)
-    tf.summary.scalar("generator_loss_cross",model.gen_loss_cross)
+
+    print("Getting the Summaries in Order")    
+    tf.summary.scalar("generator_loss", model.gen_loss)
     
     for var in tf.trainable_variables():
         tf.summary.histogram(var.op.name + "/values", var)
 
     for grad, var in model.gen_grads_and_vars:
-
         tf.summary.histogram(var.op.name + "/gradients", grad)
 
 
@@ -62,7 +60,7 @@ def main():
 
     sv = tf.train.Supervisor(logdir=output_dir, save_summaries_secs=0, saver=None)
 
-    with sv.managed_session(config=tf.ConfigProto(log_device_placement=True)) as sess:
+    with sv.managed_session() as sess:
 
         if ckpt:
             print("loading model from checkpoint")
@@ -71,60 +69,21 @@ def main():
             restore_saver.restore(sess,checkpoint)
 
 	if mode =='val':
-	    bgv = batch_generator(batch_size,False)
-            bgv.current_epoch =0
-            bgv.batch_index=0
-            tl = 0
-            tc = 0
-            tsim = 0
-            tcc = 0
-	    tkl = 0 
-            tnss = 0
-            taucb = 0
-
-            j = batch_size
-            while bgv.current_epoch==0:
-            	batchv = bgv.get_batch_vec()
-                feed_dict = {input:batchv['input'],target :batchv['target']}
-                c,l1,predictions = sess.run([model.gen_loss_cross,model.gen_loss_L1,model.outputs],feed_dict)
-                tc+=c
-                tl+=l1
-                j+=batch_size
-                for i in range(batch_size):
-                    p = predictions[i,:,:,:]
-                    t = batchv['target'][i,:,:,:]
-                    n = batchv['input'][i,0,:,:,:]
-		    VGG_MEAN = [103.939, 116.779, 123.68]
-            	    n[:,:,0]+=VGG_MEAN[0]
-                    n[:,:,1]+=VGG_MEAN[1]
-                    n[:,:,2]+=VGG_MEAN[2]
-                    pss = p[:,:,0]
-                    tss = t[:,:,0]
-                    kl = kld(pss,tss)
-                    simv = sim(pss,tss)
-                    ccv = cc(pss,tss)
-
-                    tkl+=kl
-                    tcc+=ccv
-                    tsim+= simv
-
-                    #gt = np.asarray(gt_fix[k])
-                    #nssv = nss2(pss,gt,dims[k][0],dims[k][1])
-                    #auc= aucb(pss,gt,dims[k][0],dims[k][1])
-                    #taucb+=auc
-                    #tnss+=nssv
-
-
-
-                    #save_image2(p[:,:,0],output_dir,str(bgv.batch_index+i)+'p')
-                    #save_image2(t[:,:,0],output_dir,str(bgv.batch_index+i)+'t')
-                    #save_image(n,output_dir,str(bgv.batch_index+i)+'i')
-                print(j,tl/j,tc/j,tkl/j,tcc/j,tsim/j)
-	    
+            pass	    
         
 	elif mode == "benchmark":
 	    bg = batch_generator(batch_size)
-	    
+	    batch = bg.get_batch_vec()
+	    feed_dict = {input:batch['input'],target :batch['target']}
+    	    run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
+            run_metadata = tf.RunMetadata()
+            sess.run(model.train, feed_dict = feed_dict,options=run_options, run_metadata=run_metadata)
+
+            # Create the Timeline object, and write it to a json
+            tl = timeline.Timeline(run_metadata.step_stats)
+            ctf = tl.generate_chrome_trace_format()
+            with open(output_dir+'timeline.json', 'w') as f:
+                f.write(ctf)	    
 	    for i in range(50):
 		start = time.time()
 		batch = bg.get_batch_vec()
@@ -140,6 +99,7 @@ def main():
         elif mode == 'overfit':
             bg = batch_generator(batch_size,False)
             batch = bg.get_batch_vec()
+	    print(batch['target'].shape)
             feed_dict = {input:batch['input'],target :batch['target']}
             for i in range(max_epoch):
                 start = time.time()
@@ -151,35 +111,28 @@ def main():
                         }
 
                 if should(progress_freq):
-                    fetches["gen_loss_L1"] = model.gen_loss_L1
-                    fetches["gen_loss_cross"] = model.gen_loss_cross
+                    fetches["gen_loss"] = model.gen_loss
 
-                results = sess.run(fetches,feed_dict = feed_dict)
+                results,_ = sess.run([model.gen_loss,model.train],feed_dict = feed_dict)
 
-                print(results['gen_loss_L1'],results['gen_loss_cross'],i)
+                print(results,i)
             
             predictions = sess.run(model.outputs,feed_dict = feed_dict)
             for i in range(batch_size):
-                p = predictions[i,:,:,:]
-                t = batch['target'][i,:,:,:]
                 n = batch['input'][i,0,:,:,:]
-                save_image2(p[:,:,0],output_dir,str(bg.batch_index+i)+'p')
-                save_image2(t[:,:,0],output_dir,str(bg.batch_index+i)+'t')
                 save_image(n,output_dir,str(bg.batch_index+i)+'i')
 
 	else:
 	    start = time.time()
             bg = batch_generator(batch_size)
+	    
             bgv = batch_generator(batch_size,False)
             tl = 0
-            tc = 0
             bg.current_epoch = 0
-            bg.batch_index = 0
+            bg.batch_index = 72000
             while bg.current_epoch<max_epoch:
                 c = bg.current_epoch
-                cross_loss = 0
                 l1_loss  = 0
-                gan_loss = 0
                 while bg.current_epoch == c:
                     start = time.time()
                     def should(freq):
@@ -189,21 +142,21 @@ def main():
                     feed_dict = {input:batch['input'],target :batch['target']}
                     fetches = {
                         "train": model.train,
+			"encoding": model.encoding,
                             }
 
                     if should(summary_freq):
                         fetches["summary"] = sv.summary_op
 
                     if should(progress_freq):
-                        fetches["gen_loss_L1"] = model.gen_loss_L1
-                        fetches["gen_loss_cross"] = model.gen_loss_cross
+                        fetches["gen_loss"] = model.gen_loss
 		    here =time.time() 
 		    results = sess.run(fetches,feed_dict = feed_dict)
 		    compute_time = time.time()- here
 		    print(get_time,compute_time)
-                    cross_loss+=results['gen_loss_cross']
-                    l1_loss+= results['gen_loss_L1']
-                    print(l1_loss/bg.batch_index*batch_size,cross_loss/bg.batch_index *batch_size,bg.current_epoch,bg.batch_index,time.time()-start,(time.time()-start)*(bg.batch_len-bg.batch_index)/batch_size+(max_epoch-bg.current_epoch-2)*bg.batch_len/batch_size)
+		    print(results["encoding"])
+                    l1_loss+= results['gen_loss']
+                    print(l1_loss/bg.batch_index*batch_size,bg.current_epoch,bg.batch_index,time.time()-start,(time.time()-start)*(bg.batch_len-bg.batch_index)/batch_size+(max_epoch-bg.current_epoch-2)*bg.batch_len/batch_size)
                     if should(summary_freq):
                         print("recording summary")
                         sv.summary_writer.add_summary(results["summary"], (bg.batch_index/bg.batch_size+bg.batch_len/batch_size*bg.current_epoch))
@@ -214,22 +167,18 @@ def main():
 	            bgv.current_epoch =0 
 		    bgv.batch_index=0
 		    tl = 0
-		    tc = 0
 		    j = 0
 		    while bgv.current_epoch==0:
             	    	batchv = bgv.get_batch_vec()
                     	feed_dict = {input:batchv['input'],target :batchv['target']}
-			c,l1,predictions = sess.run([model.gen_loss_cross,model.gen_loss_L1,model.outputs],feed_dict)
-		 	tc+=c
+			l1,predictions = sess.run([model.gen_loss,model.outputs],feed_dict)
 			tl+=l1
-			j+= batch_size
+			j+=4.0
 			for i in range(batch_size):
-        	            p = predictions[i,:,:,:]
-	                    t = batchv['target'][i,:,:,:]
-                	    n = batchv['input'][i,0,:,:,:]
-                	    save_image2(p[:,:,0],output_dir,str(bgv.batch_index+i)+'p')
-                	    save_image2(t[:,:,0],output_dir,str(bgv.batch_index+i)+'t')
+                	    n = batch['input'][i,0,:,:,:]
                 	    save_image(n,output_dir,str(bgv.batch_index+i)+'i')
-                    print(j,tl/j,tc/j)
+			    np.save(str(bgv.batch_index+i)+'t.npy',batchv['target'])
+			    np.save(str(bgv.batch_index+i)+'p.npy',predictions)
+                    print(j,tl/j)
 
 main()

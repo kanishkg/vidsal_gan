@@ -5,7 +5,7 @@ from vid_vgg_model import *
 import tensorflow as tf
 
 
-Model = collections.namedtuple("Model", "encoding, outputs, gen_loss_cross, gen_loss_L1, gen_grads_and_vars, train")
+Model = collections.namedtuple("Model", "encoding, outputs, gen_loss, gen_grads_and_vars, train")
 
 l1_weight = 0.
 cross_weight = 1.0
@@ -141,35 +141,61 @@ def combine_encodings(vgg, temporal, past):
     return conv6_11
 #    return vgg
 
-def inference_loss(inputs,targets,past):
+
+
+def gmm_params(encodings, N = 20):
+    with tf.variable_scope('gmm_pred'):
+        net = max_pool(encodings,'poolg')
+        net = tf.contrib.layers.flatten(net,scope= 'flatteng')
+        net = tf.contrib.slim.fully_connected(net,4096,scope = 'fc1g')
+        net = tf.nn.dropout(net,0.5)
+        net = tf.contrib.slim.fully_connected(net,4096,scope = 'fc2g')
+        weights = tf.nn.softmax(tf.contrib.slim.fully_connected(net,N,activation_fn = None, scope = 'fc3wg')    )
+        params_u = tf.contrib.slim.fully_connected(net, N*2, scope = 'fc3pg')
+        params_v = tf.contrib.layers.fully_connected(net,N*2, biases_initializer=tf.ones_initializer(),scope ='fc3vg' )
+    return weights,params_u,params_v
+
+def inference_loss(inputs,targets,past,i,N=20):
+    batch_size = 4
     with tf.variable_scope('generator'):
-        current_frame = inputs[:,0,:,:,:]
-        vgg = vgg_encoder (current_frame)
-        temporal = temporal_encoder (inputs)
+        with tf.device('/gpu:%d'%i):
+            current_frame = inputs[:,0,:,:,:]
+            vgg = vgg_encoder (current_frame)
+        with tf.device('/gpu:%d'%(i+1)):
+            temporal = temporal_encoder (inputs)
 
         encoded = combine_encodings(vgg[-1],temporal[-1],past)
-        outputs = vgg_decoder(encoded)[-1]
+        weights, params_u,params_v = gmm_params(encoded)
 
     with tf.name_scope("generator_loss"):
-        gen_loss_L1 = tf.reduce_mean(tf.abs(targets - tf.sigmoid(outputs)))
-        gen_loss_cross = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels = targets,logits = outputs))
-        gen_loss = gen_loss_L1 * l1_weight + gen_loss_cross * cross_weight
+        NLL = tf.constant(0.0)
+        params_u= tf.unstack(params_u,axis =1)
+        params_v = tf.unstack(params_v,axis=1)
+        targets = tf.transpose(targets,[1,0,2])
+        for i in range(N):
 
+             pi,mu1,mu2,sig,ro = weights[:,i],params_u[i],params_u[N+i],params_v[i],params_v[N+i]
+
+             for j in range(15):
+                 x = tf.multiply(tf.divide(targets[j,:,0]-mu1,sig),pi)
+                 y = tf.multiply(tf.divide(targets[j,:,1]-mu2,ro),pi)
+                 NLL-= tf.reduce_sum(tf.square(x)+tf.square(y))
+
+        gen_loss =-1* tf.reduce_sum(NLL)
     #with tf.name_scope("generator_train"):
     #    gen_tvars = [var for var in tf.trainable_variables() if var.name.startswith("generator")]
     #    gen_optim = tf.train.AdamOptimizer()
     #    gen_grads_and_vars = gen_optim.compute_gradients(gen_loss, var_list=gen_tvars)
-   
- 
+    #   gen_train = gen_optim.apply_gradients(gen_grads_and_vars)
+
+
     return Model(
         encoding = encoded,
-        gen_loss_cross = gen_loss_cross,
-        gen_loss_L1=gen_loss_L1,
+        gen_loss = gen_loss,
         gen_grads_and_vars= 0,
-        outputs = tf.sigmoid(outputs),
+        outputs = [weights,params_u,params_v],
         train=0,
         )
-
 
 def create_vid_model(inputs,targets,past):
     bs = 4
@@ -181,42 +207,44 @@ def create_vid_model(inputs,targets,past):
 
     with tf.variable_scope(tf.get_variable_scope()) as vscope:
         for i in xrange(num_gpus):
-            with tf.device('/gpu:%d' % i):
-                with tf.name_scope('Tower_%d'%i) as scope:
-                    # grab this portion of the input
-                    inp = inputs[i*bs:(i+1)*bs,...]
-		    tn = targets[i*bs:(i+1)*bs,...]
-		    pn = past[i*bs:(i+1)*bs,...]
-		    towers.append( inference_loss(inp,tn,pn))
-        	    tf.get_variable_scope().reuse_variables()	
+            with tf.name_scope('Tower_%d'%i) as scope:
+                # grab this portion of the input
+                inp = inputs[i*bs:(i+1)*bs,...]
+		tn = targets[i*bs:(i+1)*bs,...]
+		pn = past[i*bs:(i+1)*bs,...]
+		towers.append( inference_loss(inp,tn,pn,i))
+        	tf.get_variable_scope().reuse_variables()	
 
-	            gen_tvars = [var for var in tf.trainable_variables() if 'Tower_%d'%i in var.name]
-	 	    print gen_tvars 
-        	    gen_grads_and_vars = gen_optim.compute_gradients(towers[-1].gen_loss_cross,var_list=gen_tvars)
-		    tower_grads.append(gen_grads_and_vars)
+	        gen_tvars = [var for var in tf.trainable_variables() if 'Tower_%d'%i in var.name]
+	  
+        	gen_grads_and_vars = gen_optim.compute_gradients(towers[-1].gen_loss,var_list=gen_tvars)
+		tower_grads.append(gen_grads_and_vars)
     avg_grads = average_gradients(tower_grads)
     #avg_grads = average_gradients([t.gen_grads_and_vars for t in towers] )
-    print "Grads averaged"
-    gen_train = gen_optim.apply_gradients(tower_grads[0])
+    #print "Grads averaged"
+    gen_train = gen_optim.apply_gradients(avg_grads)
     encoding=[]
-    output = []
-    gen_loss_L1 = 0
-    gen_loss_cross = 0
+    mean = []
+    params_u = []
+    params_v = []
+    gen_loss = 0
     for tower in towers:
-	gen_loss_L1+= tower.gen_loss_L1
-	gen_loss_cross+=tower.gen_loss_cross
-	output.append(tower.outputs)
+	gen_loss+=tower.gen_loss
+	mean.append(tower.outputs[0])
+	params_u.append(tower.outputs[1])
+	params_v.append(tower.outputs[2])
 	encoding.append(tower.encoding)
-    gen_loss_L1/=num_gpus
-    gen_loss_cross/=num_gpus
-    outputs = tf.concat(output,axis =0)
+    gen_loss/=num_gpus
+    mean = tf.concat(mean,axis =0)
+    params_u = tf.concat(params_u, axis =0)
+    params_v = tf.concat(params_v,axis = 0)
+	
     encoded = tf.concat(encoding,axis=0)
 		    
     return Model(
         encoding = encoded,
-        gen_loss_cross = gen_loss_cross,
-        gen_loss_L1=gen_loss_L1,
+        gen_loss = gen_loss,
         gen_grads_and_vars=avg_grads,
-        outputs = outputs,
+        outputs = [mean,params_u,params_v],
         train=tf.group(gen_train),
         )

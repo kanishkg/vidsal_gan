@@ -4,7 +4,7 @@ import h5py
 import pickle
 from utils import ProgressBar
 
-lag = 4
+lag = 1
 num_frames = 16
 """
 file_dir = '../../../../scratch/kvg245/vidsal_gan/vidsal_gan/data/IRCCYN3D/'
@@ -43,15 +43,21 @@ with open(file_dir+'indices','w') as ifile:
     pickle.dump(index_list,ifile)
 """
 
-input_dir = '/scratch/kvg245/vidsal_gan/vidsal_gan/data/Hollywood_2/AVIClips/input2.npy'
-input  = np.load(input_dir)
+input_dir = '/scratch/kvg245/vidsal_gan/vidsal_gan/data/Hollywood2/input2.h5'
+
 index_list = []
-for i in range(input.shape[0]):
-    for j in range(input.shape[1]):
-	if j>num_frames+lag:
-	    index_list.append([i,j])
+
+with h5py.File(input_dir,'r') as hf:
+    for i in sorted(hf.keys()):
+	data = hf[i][:]
+	print(data.shape)
+    	for j in range(data.shape[0]):
+	    if j>num_frames+lag:
+	        index_list.append([int(i),j])
+	print i
 
 print "saving pickle"
-with open('/scratch/kvg245/vidsal_gan/vidsal_gan/data/Hollywood_2/index','w') as f:
+print len(index_list)
+with open('/scratch/kvg245/vidsal_gan/vidsal_gan/data/Hollywood2/index2','w') as f:
     pickle.dump(index_list,f)
 
